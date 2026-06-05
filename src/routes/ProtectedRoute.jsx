@@ -3,6 +3,13 @@ import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute({ children }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+
+  const token = localStorage.getItem("token");
+
+  // Έλεγξε και το token στο localStorage — όχι μόνο το state
+  if (!user && !token) {
+    return <Navigate to="/login" replace />;
+  }
+
   return children;
 }

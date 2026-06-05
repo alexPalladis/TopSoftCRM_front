@@ -17,165 +17,16 @@ import {
   Stack,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Divider,
+  Snackbar,
 } from "@mui/material";
+import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import CloseIcon from "@mui/icons-material/Close";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import CancelIcon from "@mui/icons-material/Cancel";
 import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
-
-function DetailRow({ label, value }) {
-  return (
-    <Box sx={{ display: "flex", py: 0.8, borderBottom: "0.5px solid #f3f4f6" }}>
-      <Typography
-        sx={{ fontSize: 12, color: "#9ca3af", width: 160, flexShrink: 0 }}
-      >
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 13, color: "#111827" }}>
-        {value || "—"}
-      </Typography>
-    </Box>
-  );
-}
-
-function CustomerDialog({ customer, open, onClose }) {
-  if (!customer) return null;
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>
-            {customer.eponymia}
-          </Typography>
-          <Typography
-            sx={{ fontSize: 12, color: "#9ca3af", fontFamily: "monospace" }}
-          >
-            ID: {customer.id} · ΑΦΜ: {customer.afm}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Chip
-            label={customer.active ? "Ενεργός" : "Ανενεργός"}
-            size="small"
-            icon={customer.active ? <CheckCircleIcon /> : <CancelIcon />}
-            sx={{
-              background: customer.active ? "#dcfce7" : "#fee2e2",
-              color: customer.active ? "#166534" : "#991b1b",
-              fontSize: 11,
-            }}
-          />
-          <IconButton size="small" onClick={onClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Στοιχεία επιχείρησης
-            </Typography>
-            <DetailRow label="Επωνυμία" value={customer.eponymia} />
-            <DetailRow
-              label="Νόμιμος εκπρόσωπος"
-              value={customer.nomimosEkprosopos}
-            />
-            <DetailRow label="Επάγγελμα" value={customer.epaggelma} />
-            <DetailRow label="Δ.Ο.Υ." value={customer.doy} />
-            <DetailRow label="ΑΦΜ" value={customer.afm} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Επικοινωνία
-            </Typography>
-            <DetailRow label="Διεύθυνση" value={customer.address} />
-            <DetailRow label="Πόλη" value={customer.city} />
-            <DetailRow label="Τ.Κ." value={customer.tk} />
-            <DetailRow label="Σταθερό" value={customer.phoneFixed} />
-            <DetailRow label="Κινητό" value={customer.phoneMobile} />
-            <DetailRow label="Email" value={customer.email} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 2 }} />
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Δίκτυο πωλήσεων
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={4}>
-                <DetailRow label="Network" value={customer.networkName} />
-              </Grid>
-              <Grid item xs={4}>
-                <DetailRow label="Dealer" value={customer.dealerName} />
-              </Grid>
-              <Grid item xs={4}>
-                <DetailRow label="Sub-dealer" value={customer.subDealerName} />
-              </Grid>
-            </Grid>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Κλείσιμο
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
 
 export default function CustomersPage() {
   const navigate = useNavigate();
@@ -190,10 +41,11 @@ export default function CustomersPage() {
   const [filterNetwork, setFilterNetwork] = useState("");
   const [filterActive, setFilterActive] = useState("");
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [dealers, setDealers] = useState([]);
   const [networks, setNetworks] = useState([]);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [errorSnack, setErrorSnack] = useState("");
   const PER_PAGE = 10;
 
   useEffect(() => {
@@ -235,13 +87,19 @@ export default function CustomersPage() {
     fetchCustomers();
   }, [fetchCustomers]);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Διαγραφή πελάτη;")) return;
+  const handleDelete = (id) => setDeleteTarget(id);
+
+  const handleConfirmDelete = async () => {
+    setDeleteLoading(true);
     try {
-      await customersApi.delete(id);
+      await customersApi.delete(deleteTarget);
+      setDeleteTarget(null);
       fetchCustomers();
     } catch (err) {
-      alert(err.response?.data?.error || "Σφάλμα διαγραφής");
+      setDeleteTarget(null);
+      setErrorSnack(err.response?.data?.error || "Σφάλμα διαγραφής");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -259,8 +117,10 @@ export default function CustomersPage() {
     filterDealer ||
     filterNetwork ||
     filterActive !== "";
+  const cities = [...new Set(customers.map((c) => c.city).filter(Boolean))];
 
   return (
+    <>
     <Box>
       <Box
         sx={{
@@ -338,13 +198,11 @@ export default function CustomersPage() {
               }}
             >
               <MenuItem value="">Όλες</MenuItem>
-              {[...new Set(customers.map((c) => c.city).filter(Boolean))].map(
-                (c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ),
-              )}
+              {cities.map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 170 }}>
@@ -542,21 +400,6 @@ export default function CustomersPage() {
                         />
                       </td>
                       <td style={{ padding: "11px 16px" }}>
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelected(c);
-                              setDialogOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
-                            }}
-                          >
-                            <VisibilityIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
                         <Tooltip title="Διόρθωση">
                           <IconButton
                             size="small"
@@ -632,12 +475,27 @@ export default function CustomersPage() {
           </Stack>
         </Box>
       </Paper>
-
-      <CustomerDialog
-        customer={selected}
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-      />
     </Box>
+
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      title="Διαγραφή πελάτη"
+      message="Είστε σίγουροι ότι θέλετε να διαγράψετε αυτόν τον πελάτη; Η ενέργεια δεν αναιρείται."
+      onConfirm={handleConfirmDelete}
+      onCancel={() => setDeleteTarget(null)}
+      loading={deleteLoading}
+    />
+
+    <Snackbar
+      open={!!errorSnack}
+      autoHideDuration={4000}
+      onClose={() => setErrorSnack("")}
+      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+    >
+      <Alert severity="error" onClose={() => setErrorSnack("")} sx={{ width: "100%" }}>
+        {errorSnack}
+      </Alert>
+    </Snackbar>
+    </>
   );
 }

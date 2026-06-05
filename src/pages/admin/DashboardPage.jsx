@@ -28,69 +28,86 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const role = user?.role;
+    const id = user?.id;
+
     const fetchAll = async () => {
       setLoading(true);
-      setError("");
-      try {
-        const [custRes, dealerRes, networkRes, ticketRes] = await Promise.all([
-          customersApi.getAll({ page: 0, size: 5 }),
-          dealersApi.getAll({ page: 0, size: 1, active: true }),
-          networksApi.getAll({ page: 0, size: 1 }),
-          ticketsApi.pendingCount(),
-        ]);
 
-        setStats({
-          totalCustomers: custRes.data.totalElements,
-          totalDealers: dealerRes.data.totalElements,
-          totalNetworks: networkRes.data.totalElements,
-          pendingTickets: ticketRes.data,
-        });
+      const promises = [
+        // Customers — όλοι βλέπουν (φιλτράρει το backend)
+        customersApi.getAll({ page: 0, size: 5 }).catch(() => null),
 
-        setCustomers(custRes.data.content);
-      } catch {
-        setError("Σφάλμα φόρτωσης δεδομένων");
-      } finally {
-        setLoading(false);
-      }
+        // Dealers — ADMIN, NETWORK, DEALER
+        ["ADMIN", "NETWORK", "DEALER"].includes(role)
+          ? dealersApi.getAll({ page: 0, size: 1 }).catch(() => null)
+          : Promise.resolve(null),
+
+        // Networks — ADMIN, NETWORK
+        ["ADMIN", "NETWORK"].includes(role)
+          ? networksApi.getAll({ page: 0, size: 1 }).catch(() => null)
+          : Promise.resolve(null),
+
+        // Tickets pending count — όλοι
+        ticketsApi.pendingCount().catch(() => null),
+      ];
+
+      const [custRes, dealerRes, networkRes, ticketRes] =
+        await Promise.all(promises);
+
+      setStats({
+        totalCustomers: custRes?.data?.totalElements ?? 0,
+        totalDealers: dealerRes?.data?.totalElements ?? 0,
+        totalNetworks: networkRes?.data?.totalElements ?? 0,
+        pendingTickets: ticketRes?.data ?? 0,
+      });
+
+      if (custRes?.data?.content) setCustomers(custRes.data.content);
+      setLoading(false);
     };
-    fetchAll();
-  }, []);
+
+    if (user) fetchAll();
+  }, [user]);
 
   const statCards = stats
     ? [
         {
-          label: "ΣΥΝΟΛΟ ΠΕΛΑΤΩΝ",
+          label: "Σύνολο πελατών",
           value: stats.totalCustomers.toLocaleString("el-GR"),
           icon: <PeopleIcon />,
           color: "#3b82f6",
           delta: "",
           up: true,
+          path: "/customers",
         },
         {
-          label: "ΕΝΕΡΓΟΙ DEALERS",
+          label: "Ενεργοί dealers",
           value: stats.totalDealers.toLocaleString("el-GR"),
           icon: <StoreIcon />,
           color: "#22c55e",
           delta: "",
           up: true,
+          path: "/dealers",
         },
         {
-          label: "NETWORKS",
+          label: "Networks",
           value: stats.totalNetworks.toLocaleString("el-GR"),
           icon: <HubIcon />,
           color: "#8b5cf6",
           delta: "Σύνολο",
           up: false,
+          path: "/networks",
         },
         {
-          icon: <WarningAmberIcon />,
-          label: "ΑΙΤΗΜΑΤΑ",
+          label: "Εκκρεμή αιτήματα",
           value: stats.pendingTickets.toLocaleString("el-GR"),
+          icon: <WarningAmberIcon />,
           color: stats.pendingTickets > 0 ? "#ef4444" : "#22c55e",
           delta:
             stats.pendingTickets > 0 ? "Χρειάζεται προσοχή" : "Όλα εντάξει",
           up: false,
           alert: stats.pendingTickets > 0,
+          path: "/requests",
         },
       ]
     : [];
@@ -118,7 +135,7 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* Stats */}
+      {/* Stat Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {statCards.map((s) => (
           <Grid item xs={12} sm={6} md={3} key={s.label}>
@@ -129,11 +146,11 @@ export default function DashboardPage() {
                 borderRadius: 2,
                 border: "0.5px solid #e5e7eb",
                 background: "#fff",
-                cursor: s.label === "Εκκρεμή αιτήματα" ? "pointer" : "default",
+                cursor: "pointer",
+                transition: "box-shadow 0.15s",
+                "&:hover": { boxShadow: "0 4px 20px rgba(0,0,0,0.08)" },
               }}
-              onClick={() =>
-                s.label === "Εκκρεμή αιτήματα" && navigate("/requests")
-              }
+              onClick={() => navigate(s.path)}
             >
               <Box
                 sx={{
@@ -197,7 +214,7 @@ export default function DashboardPage() {
         ))}
       </Grid>
 
-      {/* Recent customers */}
+      {/* Recent Customers */}
       <Paper
         elevation={0}
         sx={{
@@ -236,32 +253,30 @@ export default function DashboardPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#fafafa" }}>
-                {["ΑΦΜ", "Επωνυμία", "Πόλη", "Dealer", "Κατάσταση", "Πηγή"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #f3f4f6",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {["ΑΦΜ", "Επωνυμία", "Πόλη", "Dealer", "Ενεργός"].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: "10px 16px",
+                      textAlign: "left",
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      fontWeight: 500,
+                      borderBottom: "0.5px solid #f3f4f6",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     style={{
                       padding: 40,
                       textAlign: "center",
@@ -331,26 +346,13 @@ export default function DashboardPage() {
                     </td>
                     <td style={{ padding: "11px 16px" }}>
                       <Chip
-                        label={c.active ? "Ενεργός" : "Ανενεργός"}
+                        label={c.active ? "Ναι" : "Όχι"}
                         size="small"
                         sx={{
                           fontSize: 11,
                           height: 22,
                           background: c.active ? "#dcfce7" : "#fee2e2",
                           color: c.active ? "#166534" : "#991b1b",
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: "11px 16px" }}>
-                      <Chip
-                        label={c.source}
-                        size="small"
-                        sx={{
-                          fontSize: 11,
-                          height: 22,
-                          background:
-                            c.source === "API" ? "#dbeafe" : "#f3f4f6",
-                          color: c.source === "API" ? "#1e40af" : "#6b7280",
                         }}
                       />
                     </td>

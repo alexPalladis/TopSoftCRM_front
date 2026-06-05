@@ -3,11 +3,9 @@ import {
   Box,
   Paper,
   Typography,
-  Chip,
   IconButton,
   Button,
   TextField,
-  InputAdornment,
   MenuItem,
   Select,
   FormControl,
@@ -17,112 +15,39 @@ import {
   CircularProgress,
   Alert,
   Checkbox,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TableFooter,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
+import { commissionsApi } from "../../services/commissions";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
-
-// Mock data — θα έρθει από API τιμολογιέρας
-const mockCommissions = [
-  {
-    id: 1,
-    date: "2026-06-01",
-    product: "Συνδρομή εφαρμογής",
-    customer: "Παπαδόπουλος Α.Ε.",
-    afm: "123456789",
-    amount: 120,
-    dealerCommission: 18,
-    networkCommission: 6,
-    paidDealer: false,
-    paidNetwork: false,
-    receipt: "",
-  },
-  {
-    id: 2,
-    date: "2026-06-02",
-    product: "Σύνδεση POS",
-    customer: "Γεωργίου Ο.Ε.",
-    afm: "987654321",
-    amount: 50,
-    dealerCommission: 6,
-    networkCommission: 2.5,
-    paidDealer: true,
-    paidNetwork: true,
-    receipt: "ΤΔΑ-001",
-  },
-  {
-    id: 3,
-    date: "2026-06-03",
-    product: "Άδεια mobile App",
-    customer: "Κωνσταντίνου Μ.",
-    afm: "456789123",
-    amount: 100,
-    dealerCommission: 10,
-    networkCommission: 0,
-    paidDealer: false,
-    paidNetwork: false,
-    receipt: "",
-  },
-  {
-    id: 4,
-    date: "2026-06-03",
-    product: "Ενεργά SMS",
-    customer: "Δημητρίου Ε.Π.Ε.",
-    afm: "321654987",
-    amount: 30,
-    dealerCommission: 1.5,
-    networkCommission: 0.9,
-    paidDealer: true,
-    paidNetwork: false,
-    receipt: "ΤΔΑ-002",
-  },
-  {
-    id: 5,
-    date: "2026-06-04",
-    product: "Συνδρομή εφαρμογής",
-    customer: "Αντωνίου & ΣΙΑ",
-    afm: "654321789",
-    amount: 120,
-    dealerCommission: 18,
-    networkCommission: 7.2,
-    paidDealer: false,
-    paidNetwork: false,
-    receipt: "",
-  },
-];
-
-const products = [
-  "Συνδρομή εφαρμογής",
-  "Ενεργός Πάροχος ΗΤ",
-  "Σύνδεση POS",
-  "Άδεια mobile App",
-  "Σύνδεση WooCommerce",
-  "Ενεργά SMS",
-  "Ενεργά email",
-  "Ψηφιακό Πελατολόγιο",
-];
+import { productsApi } from "../../services/products";
 
 export default function CommissionsPage() {
-  const [rows, setRows] = useState(mockCommissions);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(0);
+
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterProduct, setFilterProduct] = useState("");
-  const [filterNetwork, setFilterNetwork] = useState("");
-  const [filterDealer, setFilterDealer] = useState("");
+  const [filterProductId, setFilterProductId] = useState("");
+  const [filterNetworkId, setFilterNetworkId] = useState("");
+  const [filterDealerId, setFilterDealerId] = useState("");
+
+  const [products, setProducts] = useState([]);
   const [networks, setNetworks] = useState([]);
   const [dealers, setDealers] = useState([]);
 
+  const PER_PAGE = 20;
+
   useEffect(() => {
+    productsApi
+      .getAll()
+      .then((r) => setProducts(r.data))
+      .catch(() => {});
     networksApi
       .getAll({ size: 100 })
       .then((r) => setNetworks(r.data.content))
@@ -133,40 +58,89 @@ export default function CommissionsPage() {
       .catch(() => {});
   }, []);
 
-  const filtered = rows.filter((r) => {
-    const matchFrom = !filterDateFrom || r.date >= filterDateFrom;
-    const matchTo = !filterDateTo || r.date <= filterDateTo;
-    const matchProduct = !filterProduct || r.product === filterProduct;
-    return matchFrom && matchTo && matchProduct;
-  });
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = {
+        page,
+        size: PER_PAGE,
+        ...(filterDateFrom && { dateFrom: filterDateFrom }),
+        ...(filterDateTo && { dateTo: filterDateTo }),
+        ...(filterProductId && { productId: filterProductId }),
+        ...(filterNetworkId && { networkId: filterNetworkId }),
+        ...(filterDealerId && { dealerId: filterDealerId }),
+      };
+      const res = await commissionsApi.getHistory(params);
+      setRows(res.data.content);
+      setTotal(res.data.totalElements);
+      setTotalPages(res.data.totalPages);
+    } catch {
+      setError("Σφάλμα φόρτωσης δεδομένων");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    page,
+    filterDateFrom,
+    filterDateTo,
+    filterProductId,
+    filterNetworkId,
+    filterDealerId,
+  ]);
 
-  const totalDealerCommission = filtered.reduce(
-    (s, r) => s + r.dealerCommission,
-    0,
-  );
-  const totalNetworkCommission = filtered.reduce(
-    (s, r) => s + r.networkCommission,
-    0,
-  );
-  const totalAmount = filtered.reduce((s, r) => s + r.amount, 0);
+  useEffect(() => {
+    fetchRows();
+  }, [fetchRows]);
 
-  const togglePaidDealer = (id) =>
-    setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, paidDealer: !r.paidDealer } : r)),
-    );
-  const togglePaidNetwork = (id) =>
-    setRows((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, paidNetwork: !r.paidNetwork } : r,
-      ),
-    );
-  const updateReceipt = (id, val) =>
+  const togglePaidDealer = async (id) => {
+    try {
+      const res = await commissionsApi.togglePaidDealer(id);
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, paidDealer: res.data.paidDealer } : r,
+        ),
+      );
+    } catch {
+      alert("Σφάλμα");
+    }
+  };
+
+  const togglePaidNetwork = async (id) => {
+    try {
+      const res = await commissionsApi.togglePaidNetwork(id);
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, paidNetwork: res.data.paidNetwork } : r,
+        ),
+      );
+    } catch {
+      alert("Σφάλμα");
+    }
+  };
+
+  const updateReceipt = async (id, val) => {
     setRows((prev) =>
       prev.map((r) => (r.id === id ? { ...r, receipt: val } : r)),
     );
-  const handleDelete = (id) => {
-    if (window.confirm("Διαγραφή εγγραφής;"))
-      setRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const saveReceipt = async (id, val) => {
+    try {
+      await commissionsApi.updateReceipt(id, val);
+    } catch {
+      alert("Σφάλμα αποθήκευσης παραστατικού");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Διαγραφή εγγραφής;")) return;
+    try {
+      await commissionsApi.deleteHistory(id);
+      fetchRows();
+    } catch (err) {
+      alert(err.response?.data?.error || "Σφάλμα");
+    }
   };
 
   const exportExcel = () => {
@@ -176,6 +150,8 @@ export default function CommissionsPage() {
       "Πελάτης",
       "ΑΦΜ",
       "Ποσό",
+      "Dealer",
+      "Network",
       "Προμήθεια Dealer",
       "Προμήθεια Network",
       "Πληρώθηκε Dealer",
@@ -184,21 +160,49 @@ export default function CommissionsPage() {
     ];
     const csvRows = [
       header.join(","),
-      ...filtered.map((r) =>
+      ...rows.map((r) =>
         [
-          r.date,
-          r.product,
-          r.customer,
-          r.afm,
+          r.paymentDate,
+          `"${r.productDescription}"`,
+          `"${r.customerEponymia}"`,
+          r.customerAfm,
           r.amount,
-          r.dealerCommission,
-          r.networkCommission,
+          `"${r.dealerName}"`,
+          `"${r.networkName || ""}"`,
+          r.dealerCommissionAmount,
+          r.networkCommissionAmount || 0,
           r.paidDealer ? "Ναι" : "Όχι",
           r.paidNetwork ? "Ναι" : "Όχι",
-          r.receipt,
+          `"${r.receipt || ""}"`,
         ].join(","),
       ),
     ];
+    const totalDC = rows.reduce(
+      (s, r) => s + Number(r.dealerCommissionAmount || 0),
+      0,
+    );
+    const totalNC = rows.reduce(
+      (s, r) => s + Number(r.networkCommissionAmount || 0),
+      0,
+    );
+    const totalA = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    csvRows.push(
+      [
+        "",
+        "",
+        "",
+        "Σύνολα",
+        totalA.toFixed(2),
+        "",
+        "",
+        totalDC.toFixed(2),
+        totalNC.toFixed(2),
+        "",
+        "",
+        "",
+      ].join(","),
+    );
+
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], {
       type: "text/csv;charset=utf-8;",
     });
@@ -213,41 +217,52 @@ export default function CommissionsPage() {
   const clearFilters = () => {
     setFilterDateFrom("");
     setFilterDateTo("");
-    setFilterProduct("");
-    setFilterNetwork("");
-    setFilterDealer("");
+    setFilterProductId("");
+    setFilterNetworkId("");
+    setFilterDealerId("");
+    setPage(0);
   };
   const hasFilters =
     filterDateFrom ||
     filterDateTo ||
-    filterProduct ||
-    filterNetwork ||
-    filterDealer;
+    filterProductId ||
+    filterNetworkId ||
+    filterDealerId;
+
+  const totalDealerCommission = rows.reduce(
+    (s, r) => s + Number(r.dealerCommissionAmount || 0),
+    0,
+  );
+  const totalNetworkCommission = rows.reduce(
+    (s, r) => s + Number(r.networkCommissionAmount || 0),
+    0,
+  );
+  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   const thStyle = {
+    padding: "10px 12px",
+    textAlign: "left",
     fontSize: 11,
     color: "#9ca3af",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontWeight: 500,
-    whiteSpace: "nowrap",
     borderBottom: "0.5px solid #e5e7eb",
     background: "#fafafa",
-    padding: "10px 12px",
+    whiteSpace: "nowrap",
   };
   const tdStyle = {
-    fontSize: 13,
-    color: "#374151",
     padding: "10px 12px",
     borderBottom: "0.5px solid #f3f4f6",
+    fontSize: 13,
+    color: "#374151",
   };
   const tfStyle = {
-    fontSize: 13,
+    padding: "10px 12px",
     fontWeight: 700,
     color: "#111827",
-    padding: "10px 12px",
-    borderBottom: "none",
     background: "#f8f9fb",
+    fontSize: 13,
   };
 
   return (
@@ -265,14 +280,14 @@ export default function CommissionsPage() {
             Προμήθειες
           </Typography>
           <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {filtered.length} εγγραφές
+            {total} εγγραφές · Ενημερώνεται αυτόματα από την τιμολογιέρα
           </Typography>
         </Box>
         <Button
           variant="outlined"
           startIcon={<DownloadIcon />}
           onClick={exportExcel}
-          sx={{ borderColor: "#e5e7eb", color: "#374151" }}
+          sx={{ borderColor: "#e5e7eb", color: "#374151", borderRadius: 2 }}
         >
           Εξαγωγή Excel
         </Button>
@@ -301,13 +316,20 @@ export default function CommissionsPage() {
             label="Από ημερομηνία"
             type="date"
             value={filterDateFrom}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={(e) => {
+              setFilterDateFrom(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              input: { notched: true },
+            }}
             sx={{
               width: 170,
               "& .MuiOutlinedInput-root": {
                 background: "#fff",
                 color: "#111827",
+                borderRadius: 1.5,
               },
             }}
           />
@@ -316,27 +338,38 @@ export default function CommissionsPage() {
             label="Έως ημερομηνία"
             type="date"
             value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={(e) => {
+              setFilterDateTo(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              input: { notched: true },
+            }}
             sx={{
               width: 170,
               "& .MuiOutlinedInput-root": {
                 background: "#fff",
                 color: "#111827",
+                borderRadius: 1.5,
               },
             }}
           />
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Προϊόν</InputLabel>
             <Select
-              value={filterProduct}
+              value={filterProductId}
               label="Προϊόν"
-              onChange={(e) => setFilterProduct(e.target.value)}
+              onChange={(e) => {
+                setFilterProductId(e.target.value);
+                setPage(0);
+              }}
+              sx={{ borderRadius: 1.5 }}
             >
               <MenuItem value="">Όλα</MenuItem>
               {products.map((p) => (
-                <MenuItem key={p} value={p}>
-                  {p}
+                <MenuItem key={p.id} value={p.id}>
+                  {p.description}
                 </MenuItem>
               ))}
             </Select>
@@ -344,9 +377,13 @@ export default function CommissionsPage() {
           <FormControl size="small" sx={{ minWidth: 170 }}>
             <InputLabel>Δίκτυο</InputLabel>
             <Select
-              value={filterNetwork}
+              value={filterNetworkId}
               label="Δίκτυο"
-              onChange={(e) => setFilterNetwork(e.target.value)}
+              onChange={(e) => {
+                setFilterNetworkId(e.target.value);
+                setPage(0);
+              }}
+              sx={{ borderRadius: 1.5 }}
             >
               <MenuItem value="">Όλα</MenuItem>
               {networks.map((n) => (
@@ -356,12 +393,16 @@ export default function CommissionsPage() {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Dealer</InputLabel>
             <Select
-              value={filterDealer}
+              value={filterDealerId}
               label="Dealer"
-              onChange={(e) => setFilterDealer(e.target.value)}
+              onChange={(e) => {
+                setFilterDealerId(e.target.value);
+                setPage(0);
+              }}
+              sx={{ borderRadius: 1.5 }}
             >
               <MenuItem value="">Όλοι</MenuItem>
               {dealers.map((d) => (
@@ -423,7 +464,7 @@ export default function CommissionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {rows.length === 0 ? (
                   <tr>
                     <td
                       colSpan={11}
@@ -438,7 +479,7 @@ export default function CommissionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r) => (
+                  rows.map((r) => (
                     <tr
                       key={r.id}
                       onMouseEnter={(e) =>
@@ -448,16 +489,20 @@ export default function CommissionsPage() {
                         (e.currentTarget.style.background = "transparent")
                       }
                     >
-                      <td style={tdStyle}>{r.date}</td>
-                      <td style={tdStyle}>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                        {r.paymentDate}
+                      </td>
+                      <td style={{ ...tdStyle, maxWidth: 160 }}>
                         <Typography
                           sx={{
                             fontSize: 12,
-                            color: "#374151",
                             whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: 160,
                           }}
                         >
-                          {r.product}
+                          {r.productDescription}
                         </Typography>
                       </td>
                       <td
@@ -468,7 +513,7 @@ export default function CommissionsPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {r.customer}
+                        {r.customerEponymia}
                       </td>
                       <td
                         style={{
@@ -478,7 +523,7 @@ export default function CommissionsPage() {
                           color: "#6b7280",
                         }}
                       >
-                        {r.afm}
+                        {r.customerAfm}
                       </td>
                       <td
                         style={{
@@ -486,62 +531,124 @@ export default function CommissionsPage() {
                           textAlign: "right",
                           fontFamily: "monospace",
                           fontWeight: 600,
+                          color: "#111827",
                         }}
                       >
-                        €{r.amount.toFixed(2)}
+                        €{Number(r.amount).toFixed(2)}
                       </td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          textAlign: "right",
-                          fontFamily: "monospace",
-                          fontWeight: 600,
-                          color: "#1d4ed8",
-                        }}
-                      >
-                        €{r.dealerCommission.toFixed(2)}
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            fontFamily: "monospace",
+                            fontWeight: 600,
+                            color: "#1d4ed8",
+                          }}
+                        >
+                          €{Number(r.dealerCommissionAmount).toFixed(2)}
+                        </Typography>
+                        <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
+                          {r.dealerName} (
+                          {Number(r.dealerCommissionPct).toFixed(0)}%)
+                        </Typography>
                       </td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          textAlign: "right",
-                          fontFamily: "monospace",
-                          fontWeight: 600,
-                          color: "#6d28d9",
-                        }}
-                      >
-                        {r.networkCommission > 0
-                          ? `€${r.networkCommission.toFixed(2)}`
-                          : "—"}
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        {r.networkCommissionAmount > 0 ? (
+                          <>
+                            <Typography
+                              sx={{
+                                fontSize: 13,
+                                fontFamily: "monospace",
+                                fontWeight: 600,
+                                color: "#6d28d9",
+                              }}
+                            >
+                              €{Number(r.networkCommissionAmount).toFixed(2)}
+                            </Typography>
+                            <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
+                              {r.networkName} (
+                              {Number(r.networkCommissionPct).toFixed(0)}%)
+                            </Typography>
+                          </>
+                        ) : (
+                          <span style={{ color: "#d1d5db", fontSize: 12 }}>
+                            —
+                          </span>
+                        )}
                       </td>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <Checkbox
-                          checked={r.paidDealer}
-                          onChange={() => togglePaidDealer(r.id)}
-                          size="small"
+                        <Box
                           sx={{
-                            color: "#d1d5db",
-                            "&.Mui-checked": { color: "#16a34a" },
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 0.5,
                           }}
-                        />
+                        >
+                          <Checkbox
+                            checked={r.paidDealer}
+                            onChange={() => togglePaidDealer(r.id)}
+                            size="small"
+                            sx={{
+                              p: 0.3,
+                              color: "#d1d5db",
+                              "&.Mui-checked": { color: "#16a34a" },
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              fontSize: 11,
+                              color: r.paidDealer ? "#16a34a" : "#9ca3af",
+                              fontWeight: r.paidDealer ? 600 : 400,
+                            }}
+                          >
+                            {r.paidDealer ? "Ναι" : "Όχι"}
+                          </Typography>
+                        </Box>
                       </td>
                       <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <Checkbox
-                          checked={r.paidNetwork}
-                          onChange={() => togglePaidNetwork(r.id)}
-                          size="small"
-                          sx={{
-                            color: "#d1d5db",
-                            "&.Mui-checked": { color: "#16a34a" },
-                          }}
-                        />
+                        {r.networkName ? (
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 0.5,
+                            }}
+                          >
+                            <Checkbox
+                              checked={r.paidNetwork}
+                              onChange={() => togglePaidNetwork(r.id)}
+                              size="small"
+                              sx={{
+                                p: 0.3,
+                                color: "#d1d5db",
+                                "&.Mui-checked": { color: "#16a34a" },
+                              }}
+                            />
+                            <Typography
+                              sx={{
+                                fontSize: 11,
+                                color: r.paidNetwork ? "#16a34a" : "#9ca3af",
+                                fontWeight: r.paidNetwork ? 600 : 400,
+                              }}
+                            >
+                              {r.paidNetwork ? "Ναι" : "Όχι"}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <span style={{ color: "#d1d5db", fontSize: 12 }}>
+                            —
+                          </span>
+                        )}
                       </td>
                       <td style={{ ...tdStyle, minWidth: 120 }}>
                         <TextField
                           size="small"
                           variant="standard"
-                          value={r.receipt}
+                          value={r.receipt || ""}
                           onChange={(e) => updateReceipt(r.id, e.target.value)}
+                          onBlur={(e) => saveReceipt(r.id, e.target.value)}
                           placeholder="—"
                           inputProps={{
                             style: { fontSize: 12, padding: "2px 4px" },
@@ -551,10 +658,13 @@ export default function CommissionsPage() {
                             "& .MuiInput-underline:before": {
                               borderBottomColor: "#e5e7eb",
                             },
+                            "& .MuiInput-underline:hover:before": {
+                              borderBottomColor: "#9ca3af",
+                            },
                           }}
                         />
                       </td>
-                      <td style={{ ...tdStyle }}>
+                      <td style={tdStyle}>
                         <Tooltip title="Διαγραφή">
                           <IconButton
                             size="small"
@@ -572,27 +682,21 @@ export default function CommissionsPage() {
                   ))
                 )}
               </tbody>
-              {/* Σύνολα */}
-              {filtered.length > 0 && (
+
+              {rows.length > 0 && (
                 <tfoot>
-                  <tr
-                    style={{
-                      background: "#f8f9fb",
-                      borderTop: "1px solid #e5e7eb",
-                    }}
-                  >
+                  <tr style={{ borderTop: "2px solid #e5e7eb" }}>
                     <td
                       colSpan={4}
-                      style={{ ...tfStyle, fontSize: 12, color: "#6b7280" }}
+                      style={{ ...tfStyle, color: "#6b7280", fontSize: 12 }}
                     >
-                      Σύνολα ({filtered.length} εγγραφές)
+                      Σύνολα ({total} εγγραφές)
                     </td>
                     <td
                       style={{
                         ...tfStyle,
                         textAlign: "right",
                         fontFamily: "monospace",
-                        color: "#111827",
                       }}
                     >
                       €{totalAmount.toFixed(2)}
@@ -615,7 +719,9 @@ export default function CommissionsPage() {
                         color: "#6d28d9",
                       }}
                     >
-                      €{totalNetworkCommission.toFixed(2)}
+                      {totalNetworkCommission > 0
+                        ? `€${totalNetworkCommission.toFixed(2)}`
+                        : "—"}
                     </td>
                     <td colSpan={4} style={tfStyle}></td>
                   </tr>
@@ -624,6 +730,49 @@ export default function CommissionsPage() {
             </table>
           </Box>
         )}
+
+        {/* Pagination + footer */}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderTop: "0.5px solid #e5e7eb",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "#fafafa",
+          }}
+        >
+          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
+            Οι εγγραφές έρχονται αυτόματα από την τιμολογιέρα · Μόνο διαγραφή,
+            checkboxes και παραστατικό επιτρέπονται
+          </Typography>
+          <Stack direction="row" spacing={0.5}>
+            {[...Array(totalPages)].map((_, i) => (
+              <Box
+                key={i}
+                onClick={() => setPage(i)}
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontWeight: page === i ? 600 : 400,
+                  background: page === i ? "#1f6feb" : "transparent",
+                  color: page === i ? "#fff" : "#6b7280",
+                  border: "0.5px solid",
+                  borderColor: page === i ? "#1f6feb" : "#e5e7eb",
+                }}
+              >
+                {i + 1}
+              </Box>
+            ))}
+          </Stack>
+        </Box>
       </Paper>
     </Box>
   );

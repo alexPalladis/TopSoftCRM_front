@@ -14,237 +14,14 @@ import {
   CircularProgress,
   Alert,
   Avatar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Divider,
+  Snackbar,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import CloseIcon from "@mui/icons-material/Close";
 import { networksApi } from "../../services/networks";
-
-function DetailRow({ label, value }) {
-  return (
-    <Box sx={{ display: "flex", py: 0.8, borderBottom: "0.5px solid #f3f4f6" }}>
-      <Typography
-        sx={{ fontSize: 12, color: "#9ca3af", width: 160, flexShrink: 0 }}
-      >
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 13, color: "#111827" }}>
-        {value || "—"}
-      </Typography>
-    </Box>
-  );
-}
-
-function NetworkDialog({ network, open, onClose }) {
-  if (!network) return null;
-  const commissions = [
-    { product: "Συνδρομή εφαρμογής", percentage: 5, sale_price: 102 },
-    { product: "Ενεργός Πάροχος ΗΤ", percentage: 4, sale_price: 90 },
-    { product: "Σύνδεση POS", percentage: 4, sale_price: 44 },
-    { product: "Άδεια mobile App", percentage: 3, sale_price: 90 },
-    { product: "Σύνδεση WooCommerce", percentage: 3, sale_price: 184 },
-    { product: "Ενεργά SMS", percentage: 2, sale_price: 28.5 },
-    { product: "Ενεργά email", percentage: 2, sale_price: 19 },
-    { product: "Ψηφιακό Πελατολόγιο", percentage: 3, sale_price: 45 },
-  ];
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Avatar
-            sx={{
-              background: "#ede9fe",
-              color: "#6d28d9",
-              width: 40,
-              height: 40,
-              fontSize: 16,
-              fontWeight: 700,
-            }}
-          >
-            {network.eponymia?.charAt(0)}
-          </Avatar>
-          <Box>
-            <Typography
-              sx={{ fontSize: 16, fontWeight: 600, color: "#111827" }}
-            >
-              {network.eponymia}
-            </Typography>
-            <Typography
-              sx={{ fontSize: 12, color: "#9ca3af", fontFamily: "monospace" }}
-            >
-              ID: {network.id} · {network.username}
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Στοιχεία επιχείρησης
-            </Typography>
-            <DetailRow label="Επωνυμία" value={network.eponymia} />
-            <DetailRow
-              label="Νόμιμος εκπρόσωπος"
-              value={network.nomimosEkprosopos}
-            />
-            <DetailRow label="Επάγγελμα" value={network.epaggelma} />
-            <DetailRow label="Δ.Ο.Υ." value={network.doy} />
-            <DetailRow label="ΑΦΜ" value={network.afm} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Επικοινωνία
-            </Typography>
-            <DetailRow label="Διεύθυνση" value={network.address} />
-            <DetailRow label="Πόλη" value={network.city} />
-            <DetailRow label="Τ.Κ." value={network.tk} />
-            <DetailRow label="Σταθερό" value={network.phoneFixed} />
-            <DetailRow label="Κινητό" value={network.phoneMobile} />
-            <DetailRow label="Email" value={network.email} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 2 }} />
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1.5,
-              }}
-            >
-              Προμήθειες ανά προϊόν
-            </Typography>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  {[
-                    "Περιγραφή",
-                    "Προμήθεια επί τελικής τιμής %",
-                    "Τιμή Πώλησης",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {commissions.map((row, i) => (
-                  <tr key={i} style={{ borderBottom: "0.5px solid #f3f4f6" }}>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {row.product}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Chip
-                        label={`${row.percentage}%`}
-                        size="small"
-                        sx={{
-                          fontSize: 11,
-                          height: 20,
-                          background: "#ede9fe",
-                          color: "#6d28d9",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#111827",
-                        fontFamily: "monospace",
-                        fontWeight: 500,
-                      }}
-                    >
-                      €{row.sale_price.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Κλείσιμο
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<EditIcon />}
-          sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
-        >
-          Διόρθωση
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
+import ConfirmDialog from "../../components/shared/ConfirmDialog";
 
 export default function NetworksPage() {
   const navigate = useNavigate();
@@ -255,8 +32,9 @@ export default function NetworksPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [errorSnack, setErrorSnack] = useState("");
   const PER_PAGE = 10;
 
   const fetchNetworks = useCallback(async () => {
@@ -282,21 +60,24 @@ export default function NetworksPage() {
     fetchNetworks();
   }, [fetchNetworks]);
 
-  const handleDelete = async (id, totalDealers) => {
-    if (totalDealers > 0) {
-      alert("Δεν μπορεί να διαγραφεί — έχει dealers");
-      return;
-    }
-    if (!window.confirm("Διαγραφή network;")) return;
+  const handleDelete = (id) => setDeleteTarget(id);
+
+  const handleConfirmDelete = async () => {
+    setDeleteLoading(true);
     try {
-      await networksApi.delete(id);
+      await networksApi.delete(deleteTarget);
+      setDeleteTarget(null);
       fetchNetworks();
     } catch (err) {
-      alert(err.response?.data?.error || "Σφάλμα διαγραφής");
+      setDeleteTarget(null);
+      setErrorSnack(err.response?.data?.error || "Σφάλμα διαγραφής");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
   return (
+    <>
     <Box>
       <Box
         sx={{
@@ -474,7 +255,7 @@ export default function NetworksPage() {
                           size="small"
                           sx={{
                             fontSize: 11,
-                            height: 20,
+                            height: 22,
                             background: "#dbeafe",
                             color: "#1e40af",
                             fontFamily: "monospace",
@@ -483,21 +264,6 @@ export default function NetworksPage() {
                         />
                       </td>
                       <td style={{ padding: "11px 16px" }}>
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelected(n);
-                              setDialogOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
-                            }}
-                          >
-                            <VisibilityIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
                         <Tooltip title="Διόρθωση">
                           <IconButton
                             size="small"
@@ -513,7 +279,7 @@ export default function NetworksPage() {
                         <Tooltip
                           title={
                             n.totalDealers > 0
-                              ? "Έχει dealers — δεν μπορεί να διαγραφεί"
+                              ? "Δεν μπορεί να διαγραφεί — έχει dealers"
                               : "Διαγραφή"
                           }
                         >
@@ -521,7 +287,7 @@ export default function NetworksPage() {
                             <IconButton
                               size="small"
                               disabled={n.totalDealers > 0}
-                              onClick={() => handleDelete(n.id, n.totalDealers)}
+                              onClick={() => handleDelete(n.id)}
                               sx={{
                                 color: "#9ca3af",
                                 "&:hover": { color: "#ef4444" },
@@ -583,12 +349,27 @@ export default function NetworksPage() {
           </Stack>
         </Box>
       </Paper>
-
-      <NetworkDialog
-        network={selected}
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-      />
     </Box>
+
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      title="Διαγραφή network"
+      message="Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το network; Η ενέργεια δεν αναιρείται."
+      onConfirm={handleConfirmDelete}
+      onCancel={() => setDeleteTarget(null)}
+      loading={deleteLoading}
+    />
+
+    <Snackbar
+      open={!!errorSnack}
+      autoHideDuration={4000}
+      onClose={() => setErrorSnack("")}
+      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+    >
+      <Alert severity="error" onClose={() => setErrorSnack("")} sx={{ width: "100%" }}>
+        {errorSnack}
+      </Alert>
+    </Snackbar>
+    </>
   );
 }

@@ -4,7 +4,6 @@ import {
   Box,
   Paper,
   Typography,
-  Chip,
   IconButton,
   Button,
   TextField,
@@ -18,238 +17,12 @@ import {
   CircularProgress,
   Alert,
   Avatar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Divider,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import CloseIcon from "@mui/icons-material/Close";
 import { subdealersApi } from "../../services/subdealers";
-
-function DetailRow({ label, value }) {
-  return (
-    <Box sx={{ display: "flex", py: 0.8, borderBottom: "0.5px solid #f3f4f6" }}>
-      <Typography
-        sx={{ fontSize: 12, color: "#9ca3af", width: 160, flexShrink: 0 }}
-      >
-        {label}
-      </Typography>
-      <Typography sx={{ fontSize: 13, color: "#111827" }}>
-        {value || "—"}
-      </Typography>
-    </Box>
-  );
-}
-
-function SubDealerDialog({ subdealer, open, onClose }) {
-  if (!subdealer) return null;
-  const commissions = [
-    { product: "Συνδρομή εφαρμογής", percentage: 8, sale_price: 102 },
-    { product: "Ενεργός Πάροχος ΗΤ", percentage: 6, sale_price: 90 },
-    { product: "Σύνδεση POS", percentage: 5, sale_price: 44 },
-    { product: "Άδεια mobile App", percentage: 6, sale_price: 90 },
-    { product: "Σύνδεση WooCommerce", percentage: 4, sale_price: 184 },
-    { product: "Ενεργά SMS", percentage: 3, sale_price: 28.5 },
-    { product: "Ενεργά email", percentage: 3, sale_price: 19 },
-    { product: "Ψηφιακό Πελατολόγιο", percentage: 5, sale_price: 45 },
-  ];
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Avatar
-            sx={{
-              background: "#fef3c7",
-              color: "#d97706",
-              width: 40,
-              height: 40,
-              fontSize: 16,
-              fontWeight: 700,
-            }}
-          >
-            {subdealer.eponymia?.charAt(0)}
-          </Avatar>
-          <Box>
-            <Typography
-              sx={{ fontSize: 16, fontWeight: 600, color: "#111827" }}
-            >
-              {subdealer.eponymia}
-            </Typography>
-            <Typography
-              sx={{ fontSize: 12, color: "#9ca3af", fontFamily: "monospace" }}
-            >
-              ID: {subdealer.id} · {subdealer.username}
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Στοιχεία επιχείρησης
-            </Typography>
-            <DetailRow label="Επωνυμία" value={subdealer.eponymia} />
-            <DetailRow
-              label="Νόμιμος εκπρόσωπος"
-              value={subdealer.nomimosEkprosopos}
-            />
-            <DetailRow label="Dealer" value={subdealer.dealerName} />
-            <DetailRow label="Επάγγελμα" value={subdealer.epaggelma} />
-            <DetailRow label="Δ.Ο.Υ." value={subdealer.doy} />
-            <DetailRow label="ΑΦΜ" value={subdealer.afm} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1,
-              }}
-            >
-              Επικοινωνία
-            </Typography>
-            <DetailRow label="Διεύθυνση" value={subdealer.address} />
-            <DetailRow label="Πόλη" value={subdealer.city} />
-            <DetailRow label="Τ.Κ." value={subdealer.tk} />
-            <DetailRow label="Σταθερό" value={subdealer.phoneFixed} />
-            <DetailRow label="Κινητό" value={subdealer.phoneMobile} />
-            <DetailRow label="Email" value={subdealer.email} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 2 }} />
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 1.5,
-              }}
-            >
-              Προμήθειες ανά προϊόν
-            </Typography>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  {[
-                    "Περιγραφή",
-                    "Προμήθεια επί τελικής τιμής %",
-                    "Τιμή Πώλησης",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {commissions.map((row, i) => (
-                  <tr key={i} style={{ borderBottom: "0.5px solid #f3f4f6" }}>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {row.product}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Chip
-                        label={`${row.percentage}%`}
-                        size="small"
-                        sx={{
-                          fontSize: 11,
-                          height: 20,
-                          background: "#fef3c7",
-                          color: "#d97706",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#111827",
-                        fontFamily: "monospace",
-                        fontWeight: 500,
-                      }}
-                    >
-                      €{row.sale_price.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Κλείσιμο
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<EditIcon />}
-          sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
-        >
-          Διόρθωση
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
 
 export default function SubDealersPage() {
   const navigate = useNavigate();
@@ -261,8 +34,6 @@ export default function SubDealersPage() {
   const [search, setSearch] = useState("");
   const [filterCity, setFilterCity] = useState("");
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const PER_PAGE = 10;
 
   const fetchSubDealers = useCallback(async () => {
@@ -292,7 +63,9 @@ export default function SubDealersPage() {
 
   const handleDelete = async (id, totalCustomers) => {
     if (totalCustomers > 0) {
-      alert("Δεν μπορεί να διαγραφεί — έχει πελάτες");
+      alert(
+        "Δεν μπορεί να διαγραφεί — υπάρχουν πελάτες που ανήκουν σε αυτόν τον sub-dealer",
+      );
       return;
     }
     if (!window.confirm("Διαγραφή sub-dealer;")) return;
@@ -367,7 +140,7 @@ export default function SubDealersPage() {
               ),
             }}
           />
-          <FormControl size="small" sx={{ minWidth: 140 }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Πόλη</InputLabel>
             <Select
               value={filterCity}
@@ -512,21 +285,6 @@ export default function SubDealersPage() {
                         {s.city}
                       </td>
                       <td style={{ padding: "11px 16px" }}>
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setSelected(s);
-                              setDialogOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
-                            }}
-                          >
-                            <VisibilityIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
                         <Tooltip title="Διόρθωση">
                           <IconButton
                             size="small"
@@ -542,7 +300,7 @@ export default function SubDealersPage() {
                         <Tooltip
                           title={
                             s.totalCustomers > 0
-                              ? "Έχει πελάτες — δεν μπορεί να διαγραφεί"
+                              ? "Δεν μπορεί να διαγραφεί — έχει πελάτες"
                               : "Διαγραφή"
                           }
                         >
@@ -614,12 +372,6 @@ export default function SubDealersPage() {
           </Stack>
         </Box>
       </Paper>
-
-      <SubDealerDialog
-        subdealer={selected}
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-      />
     </Box>
   );
 }

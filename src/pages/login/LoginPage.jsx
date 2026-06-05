@@ -21,9 +21,16 @@ const darkField = {
     "& fieldset": { borderColor: "#30363d" },
     "&:hover fieldset": { borderColor: "#6e7681" },
     "&.Mui-focused fieldset": { borderColor: "#1f6feb" },
+    "&.Mui-error fieldset": { borderColor: "#f85149" },
   },
   "& .MuiInputLabel-root": { color: "#7d8590" },
   "& .MuiInputLabel-root.Mui-focused": { color: "#1f6feb" },
+  "& .MuiInputLabel-root.Mui-error": { color: "#f85149" },
+  "& .MuiFormHelperText-root": {
+    color: "#f85149",
+    fontSize: 11,
+    marginLeft: 0,
+  },
 };
 
 export default function LoginPage() {
@@ -31,26 +38,41 @@ export default function LoginPage() {
   const { login } = useAuth();
 
   const [form, setForm] = useState({ username: "", password: "", id: "" });
+  const [fieldErrors, setFieldErrors] = useState({
+    username: "",
+    password: "",
+    id: "",
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const detectedRole = getRoleFromId(form.id);
 
   const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.username || !form.password || !form.id) {
-      setError("Συμπλήρωσε όλα τα πεδία");
+
+    // Validation ανά πεδίο
+    const fe = { username: "", password: "", id: "" };
+    if (!form.username) fe.username = "Συμπλήρωσε το username";
+    if (!form.password) fe.password = "Συμπλήρωσε το password";
+    if (!form.id) fe.id = "Συμπλήρωσε τον κωδικό ID";
+    else if (form.id.length !== 8)
+      fe.id = "Το ID πρέπει να είναι ακριβώς 8 ψηφία";
+    else if (!detectedRole)
+      fe.id = "Μη έγκυρο ID — ο πρώτος αριθμός πρέπει να είναι 0, 1, 2 ή 3";
+
+    if (fe.username || fe.password || fe.id) {
+      setFieldErrors(fe);
       return;
     }
-    if (!detectedRole) {
-      setError("Μη έγκυρο ID — ο πρώτος αριθμός πρέπει να είναι 0, 1, 2 ή 3");
-      return;
-    }
+
     setLoading(true);
     try {
       await login(form.username, form.password, form.id);
@@ -94,6 +116,7 @@ export default function LoginPage() {
         }}
       >
         <CardContent sx={{ p: 4 }}>
+          {/* Logo */}
           <Stack
             direction="row"
             alignItems="center"
@@ -113,6 +136,7 @@ export default function LoginPage() {
                 fontSize: 18,
                 color: "#fff",
                 fontFamily: "monospace",
+                flexShrink: 0,
               }}
             >
               T
@@ -144,13 +168,25 @@ export default function LoginPage() {
             Συνδεθείτε με τα στοιχεία σας
           </Typography>
 
+          {/* Γενικό error (λάθος credentials) */}
           {error && (
-            <Alert severity="error" sx={{ mb: 2, fontSize: 13 }}>
+            <Alert
+              severity="error"
+              sx={{
+                mb: 2,
+                fontSize: 13,
+                background: "#2d1a1a",
+                color: "#f85149",
+                border: "0.5px solid #f8514933",
+                "& .MuiAlert-icon": { color: "#f85149" },
+              }}
+            >
               {error}
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
+            {/* Username */}
             <TextField
               fullWidth
               label="Username"
@@ -158,8 +194,13 @@ export default function LoginPage() {
               value={form.username}
               onChange={handleChange}
               size="small"
+              error={!!fieldErrors.username}
+              helperText={fieldErrors.username}
               sx={{ mb: 2, ...darkField }}
+              autoComplete="username"
             />
+
+            {/* Password */}
             <TextField
               fullWidth
               label="Password"
@@ -168,8 +209,13 @@ export default function LoginPage() {
               value={form.password}
               onChange={handleChange}
               size="small"
+              error={!!fieldErrors.password}
+              helperText={fieldErrors.password}
               sx={{ mb: 2, ...darkField }}
+              autoComplete="current-password"
             />
+
+            {/* ID */}
             <TextField
               fullWidth
               label="ID (8ψήφιος)"
@@ -177,28 +223,15 @@ export default function LoginPage() {
               value={form.id}
               onChange={handleChange}
               size="small"
+              error={!!fieldErrors.id}
+              helperText={fieldErrors.id}
               sx={{ mb: 1, ...darkField }}
-              inputProps={{ maxLength: 8, style: { fontFamily: "monospace" } }}
+              inputProps={{
+                maxLength: 8,
+                style: { fontFamily: "monospace", letterSpacing: "0.1em" },
+              }}
+              autoComplete="off"
             />
-
-            <Box sx={{ mb: 3, minHeight: 28 }}>
-              {detectedRole ? (
-                <Chip
-                  label={`Ρόλος: ${detectedRole}`}
-                  color={roleColors[detectedRole]}
-                  size="small"
-                  sx={{ fontSize: 11 }}
-                />
-              ) : form.id.length > 0 ? (
-                <Typography sx={{ fontSize: 12, color: "#f85149" }}>
-                  Μη αναγνωρίσιμο ID
-                </Typography>
-              ) : (
-                <Typography sx={{ fontSize: 12, color: "#7d8590" }}>
-                  0=Admin · 1=Network · 2=Dealer · 3=SubDealer
-                </Typography>
-              )}
-            </Box>
 
             <Button
               fullWidth
@@ -209,7 +242,13 @@ export default function LoginPage() {
                 background: "#1f6feb",
                 py: 1.2,
                 fontWeight: 600,
+                fontSize: 14,
+                borderRadius: 1.5,
                 "&:hover": { background: "#388bfd" },
+                "&.Mui-disabled": {
+                  background: "#1f6feb55",
+                  color: "#ffffff88",
+                },
               }}
             >
               {loading ? (

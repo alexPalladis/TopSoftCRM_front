@@ -11,11 +11,11 @@ import SubDealersPage from "./pages/admin/SubDealersPage";
 import RequestsPage from "./pages/admin/RequestsPage";
 import CommissionsPage from "./pages/admin/CommissionsPage";
 import PricelistPage from "./pages/admin/PricelistPage";
-import NewCustomerPage from "./pages/admin/NewCustomerPage";
-import NewDealerPage from "./pages/admin/NewDealerPage";
-import NewNetworkPage from "./pages/admin/NewNetworkPage";
-import NewSubDealerPage from "./pages/admin/NewSubDealerPage";
 import ProfilePage from "./pages/admin/ProfilePage";
+import CustomerFormPage from "./pages/admin/CustomerFormPage";
+import NetworkFormPage from "./pages/admin/NetworkFormPage";
+import DealerFormPage from "./pages/admin/DealerFormPage";
+import SubDealerFormPage from "./pages/admin/SubDealerFormPage";
 
 export default function App() {
   return (
@@ -34,13 +34,17 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="customers" element={<CustomersPage />} />
-            <Route path="customers/new" element={<NewCustomerPage />} />
+            <Route path="customers/new" element={<CustomerFormPage />} />
+            <Route path="customers/:id/edit" element={<CustomerFormPage />} />
             <Route path="dealers" element={<DealersPage />} />
-            <Route path="dealers/new" element={<NewDealerPage />} />
+            <Route path="dealers/new" element={<DealerFormPage />} />
+            <Route path="dealers/:id/edit" element={<DealerFormPage />} />
             <Route path="networks" element={<NetworksPage />} />
-            <Route path="networks/new" element={<NewNetworkPage />} />
+            <Route path="networks/new" element={<NetworkFormPage />} />
+            <Route path="networks/:id/edit" element={<NetworkFormPage />} />
             <Route path="subdealers" element={<SubDealersPage />} />
-            <Route path="subdealers/new" element={<NewSubDealerPage />} />
+            <Route path="subdealers/new" element={<SubDealerFormPage />} />
+            <Route path="subdealers/:id/edit" element={<SubDealerFormPage />} />
             <Route path="requests" element={<RequestsPage />} />
             <Route path="commissions" element={<CommissionsPage />} />
             <Route path="pricelist" element={<PricelistPage />} />
