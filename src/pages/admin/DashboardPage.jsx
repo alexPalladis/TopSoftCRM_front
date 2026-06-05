@@ -18,6 +18,7 @@ import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
 import { ticketsApi } from "../../services/tickets";
+import { useAuth } from "../../context/AuthContext";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function DashboardPage() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const role = user?.role;
@@ -148,6 +150,10 @@ export default function DashboardPage() {
                 background: "#fff",
                 cursor: "pointer",
                 transition: "box-shadow 0.15s",
+                height: 130,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
                 "&:hover": { boxShadow: "0 4px 20px rgba(0,0,0,0.08)" },
               }}
               onClick={() => navigate(s.path)}
@@ -155,11 +161,11 @@ export default function DashboardPage() {
               <Box
                 sx={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  mb: 1.5,
+                  alignItems: "center",
+                  gap: 0.8,
                 }}
               >
+                <Box sx={{ color: s.color, opacity: 0.7, display: "flex" }}>{s.icon}</Box>
                 <Typography
                   sx={{
                     fontSize: 11,
@@ -171,7 +177,6 @@ export default function DashboardPage() {
                 >
                   {s.label}
                 </Typography>
-                <Box sx={{ color: s.color, opacity: 0.7 }}>{s.icon}</Box>
               </Box>
               <Typography
                 sx={{
@@ -184,21 +189,20 @@ export default function DashboardPage() {
               >
                 {s.value}
               </Typography>
-              {s.delta && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                    mt: 1,
-                  }}
-                >
-                  {s.up && (
-                    <TrendingUpIcon sx={{ fontSize: 14, color: "#16a34a" }} />
-                  )}
-                  {s.alert && (
-                    <WarningAmberIcon sx={{ fontSize: 14, color: "#ef4444" }} />
-                  )}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                }}
+              >
+                {s.up && (
+                  <TrendingUpIcon sx={{ fontSize: 14, color: "#16a34a" }} />
+                )}
+                {s.alert && (
+                  <WarningAmberIcon sx={{ fontSize: 14, color: "#ef4444" }} />
+                )}
+                {s.delta && (
                   <Typography
                     sx={{
                       fontSize: 12,
@@ -207,8 +211,8 @@ export default function DashboardPage() {
                   >
                     {s.delta}
                   </Typography>
-                </Box>
-              )}
+                )}
+              </Box>
             </Paper>
           </Grid>
         ))}

@@ -10,15 +10,14 @@ import {
   CircularProgress,
   TextField,
   Grid,
-  MenuItem,
-  Select,
-  FormControl,
   Tooltip,
+  Chip,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
+import LockIcon from "@mui/icons-material/Lock";
 import { dealersApi } from "../../services/dealers";
-import { networksApi } from "../../services/networks";
+import { useAuth } from "../../context/AuthContext";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", defaultPrice: 120 },
@@ -31,11 +30,20 @@ const PRODUCTS = [
   { id: 8, description: "Ψηφιακό Πελατολόγιο", defaultPrice: 50 },
 ];
 
+// Προμήθειες — read only για Network, έρχονται από τιμοκατάλογο
+const readOnlyCommissions = PRODUCTS.map((p, i) => ({
+  ...p,
+  percentage: [15, 10, 12, 10, 8, 5, 5, 10][i],
+  salePrice: (
+    p.defaultPrice *
+    (1 - [15, 10, 12, 10, 8, 5, 5, 10][i] / 100)
+  ).toFixed(2),
+}));
+
 const initialForm = {
   afm: "",
   eponymia: "",
   nomimosEkprosopos: "",
-  networkId: "",
   epaggelma: "",
   doy: "",
   address: "",
@@ -48,13 +56,6 @@ const initialForm = {
   password: "",
   passwordConfirm: "",
 };
-
-const initialCommissions = PRODUCTS.map((p) => ({
-  productId: p.id,
-  description: p.description,
-  percentage: "",
-  salePrice: p.defaultPrice,
-}));
 
 const required = [
   "afm",
@@ -132,27 +133,19 @@ function Field({ label, req, error, children }) {
   );
 }
 
-export default function DealerFormPage() {
+export default function NetworkDealerFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const isEdit = !!id;
 
   const [form, setForm] = useState(initialForm);
-  const [commissions, setCommissions] = useState(initialCommissions);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(isEdit);
   const [submitted, setSubmitted] = useState(false);
   const [globalError, setGlobalError] = useState("");
   const [taxisLoading, setTaxisLoading] = useState(false);
-  const [networks, setNetworks] = useState([]);
-
-  useEffect(() => {
-    networksApi
-      .getAll({ size: 100 })
-      .then((r) => setNetworks(r.data.content))
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -165,7 +158,6 @@ export default function DealerFormPage() {
           afm: d.afm || "",
           eponymia: d.eponymia || "",
           nomimosEkprosopos: d.nomimosEkprosopos || "",
-          networkId: d.networkId || "",
           epaggelma: d.epaggelma || "",
           doy: d.doy || "",
           address: d.address || "",
@@ -213,22 +205,6 @@ export default function DealerFormPage() {
     }
   };
 
-  const handleCommissionChange = (i, field, value) => {
-    setCommissions((prev) =>
-      prev.map((c, idx) => {
-        if (idx !== i) return c;
-        const updated = { ...c, [field]: value };
-        if (field === "percentage" && value !== "") {
-          updated.salePrice = (
-            PRODUCTS[i].defaultPrice *
-            (1 - parseFloat(value) / 100)
-          ).toFixed(2);
-        }
-        return updated;
-      }),
-    );
-  };
-
   const handleSubmit = async () => {
     const errs = validate(form, isEdit);
     if (Object.keys(errs).length > 0) {
@@ -237,7 +213,10 @@ export default function DealerFormPage() {
     }
     setLoading(true);
     try {
-      const payload = { ...form, networkId: form.networkId || null };
+      const payload = {
+        ...form,
+        networkId: user?.id, // Αυτόματα ανήκει στο network που το δημιουργεί
+      };
       if (isEdit) await dealersApi.update(id, payload);
       else await dealersApi.create(payload);
       setSubmitted(true);
@@ -281,7 +260,6 @@ export default function DealerFormPage() {
 
   return (
     <Box sx={{ maxWidth: 900 }}>
-      {/* Header */}
       <Box
         sx={{
           display: "flex",
@@ -306,7 +284,7 @@ export default function DealerFormPage() {
               {isEdit ? "Επεξεργασία Dealer" : "Νέος Dealer"}
             </Typography>
             <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-              {isEdit ? `ID: ${id}` : "Καταχώρηση νέου dealer"}
+              {isEdit ? `ID: ${id}` : "Καταχώρηση νέου dealer στο δίκτυό σας"}
             </Typography>
           </Box>
         </Box>
@@ -355,7 +333,7 @@ export default function DealerFormPage() {
       )}
 
       <Stack spacing={2}>
-        {/* ===== ΣΤΟΙΧΕΙΑ ΕΠΙΧΕΙΡΗΣΗΣ ===== */}
+        {/* Στοιχεία επιχείρησης */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -382,8 +360,6 @@ export default function DealerFormPage() {
                 </Field>
               </Grid>
             )}
-
-            {/* ΑΦΜ + TAXIS */}
             <Grid item xs={12} md={4}>
               <Field label="ΑΦΜ" req error={errors.afm}>
                 <Box sx={{ display: "flex", gap: 1 }}>
@@ -406,7 +382,7 @@ export default function DealerFormPage() {
                     }}
                     sx={inputSx}
                   />
-                  <Tooltip title="Αυτόματη αναζήτηση από TAXIS (GSIS)">
+                  <Tooltip title="Αυτόματη αναζήτηση από TAXIS">
                     <Button
                       variant="outlined"
                       size="small"
@@ -425,7 +401,6 @@ export default function DealerFormPage() {
                 </Box>
               </Field>
             </Grid>
-
             <Grid item xs={12} md={8}>
               <Field label="Επωνυμία" req error={errors.eponymia}>
                 <TextField
@@ -438,7 +413,6 @@ export default function DealerFormPage() {
                 />
               </Field>
             </Grid>
-
             <Grid item xs={12} md={5}>
               <Field label="Νόμιμος εκπρόσωπος">
                 <TextField
@@ -452,29 +426,6 @@ export default function DealerFormPage() {
                 />
               </Field>
             </Grid>
-
-            <Grid item xs={12} md={4}>
-              <Field label="Network">
-                <FormControl fullWidth size="small">
-                  <Select
-                    value={form.networkId}
-                    onChange={(e) => handleChange("networkId", e.target.value)}
-                    displayEmpty
-                    sx={{ borderRadius: 1.5, fontSize: 13 }}
-                  >
-                    <MenuItem value="">
-                      <em>— Κανένα (ανεξάρτητος) —</em>
-                    </MenuItem>
-                    {networks.map((n) => (
-                      <MenuItem key={n.id} value={n.id}>
-                        {n.eponymia}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Field>
-            </Grid>
-
             <Grid item xs={12} md={3}>
               <Field label="Επάγγελμα" req error={errors.epaggelma}>
                 <TextField
@@ -487,7 +438,6 @@ export default function DealerFormPage() {
                 />
               </Field>
             </Grid>
-
             <Grid item xs={12} md={3}>
               <Field label="Δ.Ο.Υ." req error={errors.doy}>
                 <TextField
@@ -500,10 +450,26 @@ export default function DealerFormPage() {
                 />
               </Field>
             </Grid>
+            {/* Network — αυτόματα το δικό του */}
+            <Grid item xs={12} md={4}>
+              <Field label="Network">
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={user?.username || ""}
+                  disabled
+                  helperText="Ανήκει αυτόματα στο δίκτυό σας"
+                  sx={{
+                    ...inputSx,
+                    "& .MuiFormHelperText-root": { fontSize: 11 },
+                  }}
+                />
+              </Field>
+            </Grid>
           </Grid>
         </Paper>
 
-        {/* ===== ΕΠΙΚΟΙΝΩΝΙΑ ===== */}
+        {/* Επικοινωνία */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -595,7 +561,7 @@ export default function DealerFormPage() {
           </Grid>
         </Paper>
 
-        {/* ===== ΣΤΟΙΧΕΙΑ ΕΙΣΟΔΟΥ ===== */}
+        {/* Στοιχεία εισόδου */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -656,7 +622,7 @@ export default function DealerFormPage() {
           </Grid>
         </Paper>
 
-        {/* ===== ΠΡΟΜΗΘΕΙΕΣ ===== */}
+        {/* Προμήθειες — READ ONLY για Network */}
         <Paper
           elevation={0}
           sx={{
@@ -665,12 +631,31 @@ export default function DealerFormPage() {
             overflow: "hidden",
           }}
         >
-          <Box sx={{ px: 3, py: 2, borderBottom: "0.5px solid #e5e7eb" }}>
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              borderBottom: "0.5px solid #e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
             <SectionTitle>Προμήθειες</SectionTitle>
-            <Typography sx={{ fontSize: 12, color: "#9ca3af", mt: -1 }}>
-              Οι τιμές πώλησης υπολογίζονται αυτόματα από τον τιμοκατάλογο · Το
-              % μπορεί να διορθωθεί χειροκίνητα
-            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                mb: 1.5,
+                ml: 1,
+              }}
+            >
+              <LockIcon sx={{ fontSize: 14, color: "#9ca3af" }} />
+              <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
+                Μόνο προβολή — ορίζονται από τον τιμοκατάλογο
+              </Typography>
+            </Box>
           </Box>
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -678,7 +663,7 @@ export default function DealerFormPage() {
                 <tr>
                   <th style={thStyle}>#</th>
                   <th style={thStyle}>Περιγραφή</th>
-                  <th style={{ ...thStyle, width: 220 }}>
+                  <th style={{ ...thStyle, width: 200 }}>
                     Προμήθεια επί τελικής τιμής %
                   </th>
                   <th style={{ ...thStyle, width: 160, textAlign: "right" }}>
@@ -687,16 +672,13 @@ export default function DealerFormPage() {
                 </tr>
               </thead>
               <tbody>
-                {commissions.map((c, i) => (
+                {readOnlyCommissions.map((c, i) => (
                   <tr
-                    key={c.productId}
-                    style={{ borderBottom: "0.5px solid #f3f4f6" }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "#f9fafb")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "transparent")
-                    }
+                    key={c.id}
+                    style={{
+                      borderBottom: "0.5px solid #f3f4f6",
+                      background: "#fafafa",
+                    }}
                   >
                     <td
                       style={{
@@ -712,46 +694,24 @@ export default function DealerFormPage() {
                       style={{
                         padding: "10px 16px",
                         fontSize: 13,
-                        color: "#111827",
+                        color: "#374151",
                       }}
                     >
                       {c.description}
                     </td>
                     <td style={{ padding: "10px 16px" }}>
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                      >
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={c.percentage}
-                          onChange={(e) =>
-                            handleCommissionChange(
-                              i,
-                              "percentage",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="0"
-                          inputProps={{
-                            min: 0,
-                            max: 100,
-                            step: 0.1,
-                            style: {
-                              width: 70,
-                              textAlign: "center",
-                              fontFamily: "monospace",
-                              padding: "6px 8px",
-                            },
-                          }}
-                          sx={{
-                            "& .MuiOutlinedInput-root": { borderRadius: 1.5 },
-                          }}
-                        />
-                        <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-                          %
-                        </Typography>
-                      </Box>
+                      <Chip
+                        label={`${c.percentage}%`}
+                        size="small"
+                        sx={{
+                          fontSize: 11,
+                          height: 22,
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                        }}
+                      />
                     </td>
                     <td style={{ padding: "10px 16px", textAlign: "right" }}>
                       <Typography
@@ -762,7 +722,7 @@ export default function DealerFormPage() {
                           fontFamily: "monospace",
                         }}
                       >
-                        €{Number(c.salePrice).toFixed(2)}
+                        €{c.salePrice}
                       </Typography>
                       <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
                         από τιμοκατάλογο
