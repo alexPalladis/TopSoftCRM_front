@@ -217,7 +217,7 @@ export default function NetworkCommissionsPage() {
           onClick={exportExcel}
           sx={{ borderColor: "#e5e7eb", color: "#374151", borderRadius: 2 }}
         >
-          Εξαγωγή Excel
+          ΕΞΑΓΩΓΗ EXCEL
         </Button>
       </Box>
 

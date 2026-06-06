@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Paper,
@@ -28,42 +29,69 @@ import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
 
+const PER_PAGE = 10;
+
 export default function CustomersPage() {
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const queryClient = useQueryClient();
+
+  // ── Filter & pagination state ──────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [filterCity, setFilterCity] = useState("");
   const [filterDealer, setFilterDealer] = useState("");
   const [filterNetwork, setFilterNetwork] = useState("");
   const [filterActive, setFilterActive] = useState("");
   const [page, setPage] = useState(0);
-  const [dealers, setDealers] = useState([]);
-  const [networks, setNetworks] = useState([]);
+
+  // ── Delete state ───────────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [errorSnack, setErrorSnack] = useState("");
-  const PER_PAGE = 10;
 
-  useEffect(() => {
-    dealersApi
-      .getAll({ size: 100 })
-      .then((r) => setDealers(r.data.content))
-      .catch(() => {});
-    networksApi
-      .getAll({ size: 100 })
-      .then((r) => setNetworks(r.data.content))
-      .catch(() => {});
-  }, []);
+  // ── Dropdown reference data (dealers + networks for filter selects) ────────
+  //
+  // These two lists change rarely (maybe once a week when a new dealer is added).
+  // staleTime on the QueryClient is 60s globally, but we override to 5 minutes
+  // here because this data is very stable — no point refetching a dealer list
+  // every time the user navigates to CustomersPage.
+  //
+  // Result: first visit fetches once, next 5 minutes loads from cache instantly.
+  const { data: dealersData } = useQuery({
+    queryKey: ["dealers", "dropdown"],
+    queryFn: () => dealersApi.getAll({ size: 100 }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    select: (res) => res.data.content,
+  });
+  const dealers = dealersData ?? [];
 
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params = {
+  const { data: networksData } = useQuery({
+    queryKey: ["networks", "dropdown"],
+    queryFn: () => networksApi.getAll({ size: 100 }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    select: (res) => res.data.content,
+  });
+  const networks = networksData ?? [];
+
+  // ── Main customers list ────────────────────────────────────────────────────
+  //
+  // The queryKey includes all filter/pagination values. When any of them
+  // changes, React Query automatically fires a new request — no need for
+  // useCallback or manual useEffect dependency arrays.
+  //
+  // keepPreviousData (placeholderData) keeps the current page visible while
+  // the next page loads, preventing layout flicker on pagination.
+  const {
+    data: customersData,
+    isLoading,
+    isError,
+    isFetching,
+  } = useQuery({
+    queryKey: [
+      "customers",
+      { page, search, filterCity, filterDealer, filterNetwork, filterActive },
+    ],
+    queryFn: () =>
+      customersApi.getAll({
         page,
         size: PER_PAGE,
         ...(search && { search }),
@@ -71,30 +99,28 @@ export default function CustomersPage() {
         ...(filterDealer && { dealerId: filterDealer }),
         ...(filterNetwork && { networkId: filterNetwork }),
         ...(filterActive !== "" && { active: filterActive }),
-      };
-      const res = await customersApi.getAll(params);
-      setCustomers(res.data.content);
-      setTotal(res.data.totalElements);
-      setTotalPages(res.data.totalPages);
-    } catch {
-      setError("Σφάλμα φόρτωσης δεδομένων");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, filterCity, filterDealer, filterNetwork, filterActive]);
+      }),
+    placeholderData: (prev) => prev, // keeps previous page data while next loads
+    select: (res) => res.data,
+  });
 
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+  const customers = customersData?.content ?? [];
+  const total = customersData?.totalElements ?? 0;
+  const totalPages = customersData?.totalPages ?? 0;
 
-  const handleDelete = (id) => setDeleteTarget(id);
-
+  // ── Delete handler ─────────────────────────────────────────────────────────
+  //
+  // After a successful delete we do two things:
+  //  1. invalidate ["customers", ...] → the list refetches with correct counts
+  //  2. invalidate ["dashboard", "customers"] → the Dashboard stat card updates
+  //     automatically the next time the user visits it (or if it's mounted)
   const handleConfirmDelete = async () => {
     setDeleteLoading(true);
     try {
       await customersApi.delete(deleteTarget);
       setDeleteTarget(null);
-      fetchCustomers();
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "customers"] });
     } catch (err) {
       setDeleteTarget(null);
       setErrorSnack(err.response?.data?.error || "Σφάλμα διαγραφής");
@@ -111,6 +137,7 @@ export default function CustomersPage() {
     setFilterActive("");
     setPage(0);
   };
+
   const hasFilters =
     search ||
     filterCity ||
@@ -121,381 +148,395 @@ export default function CustomersPage() {
 
   return (
     <>
-    <Box>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-            Πελάτες
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate("/customers/new")}
-          sx={{
-            background: "#1f6feb",
-            borderRadius: 2,
-            fontWeight: 600,
-            "&:hover": { background: "#1a5fd6" },
-          }}
-        >
-          Νέος πελάτης
-        </Button>
-      </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper
-        elevation={0}
-        sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
-      >
-        <Stack
-          direction="row"
-          spacing={1.5}
-          flexWrap="wrap"
-          alignItems="center"
-          useFlexGap
-        >
-          <TextField
-            size="small"
-            placeholder="Αναζήτηση ΑΦΜ, επωνυμία..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            sx={{ width: 240 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ fontSize: 18, color: "#9ca3af" }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Πόλη</InputLabel>
-            <Select
-              value={filterCity}
-              label="Πόλη"
-              onChange={(e) => {
-                setFilterCity(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλες</MenuItem>
-              {cities.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
-            <InputLabel>Dealer</InputLabel>
-            <Select
-              value={filterDealer}
-              label="Dealer"
-              onChange={(e) => {
-                setFilterDealer(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλοι</MenuItem>
-              {dealers.map((d) => (
-                <MenuItem key={d.id} value={d.id}>
-                  {d.eponymia}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
-            <InputLabel>Network</InputLabel>
-            <Select
-              value={filterNetwork}
-              label="Network"
-              onChange={(e) => {
-                setFilterNetwork(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλα</MenuItem>
-              {networks.map((n) => (
-                <MenuItem key={n.id} value={n.id}>
-                  {n.eponymia}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Ενεργός</InputLabel>
-            <Select
-              value={filterActive}
-              label="Ενεργός"
-              onChange={(e) => {
-                setFilterActive(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλοι</MenuItem>
-              <MenuItem value="true">Ναι</MenuItem>
-              <MenuItem value="false">Όχι</MenuItem>
-            </Select>
-          </FormControl>
-          {hasFilters && (
-            <Button
-              size="small"
-              onClick={clearFilters}
-              sx={{ color: "#9ca3af", fontSize: 12 }}
-            >
-              Καθαρισμός ✕
-            </Button>
-          )}
-        </Stack>
-      </Paper>
-
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 2,
-          border: "0.5px solid #e5e7eb",
-          overflow: "hidden",
-        }}
-      >
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={32} />
-          </Box>
-        ) : (
-          <Box sx={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  {[
-                    "ΑΦΜ",
-                    "Επωνυμία",
-                    "Πόλη",
-                    "Dealer",
-                    "Network",
-                    "Ενεργός",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {customers.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        color: "#9ca3af",
-                        fontSize: 14,
-                      }}
-                    >
-                      Δεν βρέθηκαν εγγραφές
-                    </td>
-                  </tr>
-                ) : (
-                  customers.map((c) => (
-                    <tr
-                      key={c.id}
-                      style={{ borderBottom: "0.5px solid #f3f4f6" }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                    >
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontFamily: "monospace",
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {c.afm}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "#111827",
-                        }}
-                      >
-                        {c.eponymia}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 13,
-                          color: "#374151",
-                        }}
-                      >
-                        {c.city}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {c.dealerName || "—"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {c.networkName || "—"}
-                      </td>
-                      <td style={{ padding: "11px 16px" }}>
-                        <Chip
-                          label={c.active ? "Ναι" : "Όχι"}
-                          size="small"
-                          sx={{
-                            fontSize: 11,
-                            height: 22,
-                            background: c.active ? "#dcfce7" : "#fee2e2",
-                            color: c.active ? "#166534" : "#991b1b",
-                          }}
-                        />
-                      </td>
-                      <td style={{ padding: "11px 16px" }}>
-                        <Tooltip title="Διόρθωση">
-                          <IconButton
-                            size="small"
-                            onClick={() => navigate(`/customers/${c.id}/edit`)}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#f59e0b" },
-                            }}
-                          >
-                            <EditIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Διαγραφή">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(c.id)}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#ef4444" },
-                            }}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </Box>
-        )}
+      <Box>
         <Box
           sx={{
-            px: 2,
-            py: 1.5,
-            borderTop: "0.5px solid #e5e7eb",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            mb: 3,
           }}
         >
-          <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>
-            {total === 0
-              ? "0"
-              : `${page * PER_PAGE + 1}–${Math.min((page + 1) * PER_PAGE, total)}`}{" "}
-            από {total} εγγραφές
-          </Typography>
-          <Stack direction="row" spacing={0.5}>
-            {[...Array(totalPages)].map((_, i) => (
-              <Box
-                key={i}
-                onClick={() => setPage(i)}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  fontWeight: page === i ? 600 : 400,
-                  background: page === i ? "#1f6feb" : "transparent",
-                  color: page === i ? "#fff" : "#6b7280",
-                  border: "0.5px solid",
-                  borderColor: page === i ? "#1f6feb" : "#e5e7eb",
+          <Box>
+            <Typography
+              sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}
+            >
+              Πελάτες
+            </Typography>
+            {/* isFetching (not isLoading) shows a subtle indicator on
+                background refetches without hiding the table */}
+            <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
+              {total} εγγραφές{isFetching && !isLoading ? " · ανανέωση…" : ""}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate("/customers/new")}
+            sx={{
+              background: "#1f6feb",
+              borderRadius: 2,
+              fontWeight: 600,
+              "&:hover": { background: "#1a5fd6" },
+            }}
+          >
+            ΠΡΟΣΘΗΚΗ ΠΕΛΑΤΗ
+          </Button>
+        </Box>
+
+        {isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Σφάλμα φόρτωσης δεδομένων
+          </Alert>
+        )}
+
+        {/* Filters */}
+        <Paper
+          elevation={0}
+          sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.5}
+            flexWrap="wrap"
+            alignItems="center"
+            useFlexGap
+          >
+            <TextField
+              size="small"
+              placeholder="Αναζήτηση ΑΦΜ, επωνυμία..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              sx={{ width: 240 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: "#9ca3af" }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl size="small" sx={{ minWidth: 130 }}>
+              <InputLabel>Πόλη</InputLabel>
+              <Select
+                value={filterCity}
+                label="Πόλη"
+                onChange={(e) => {
+                  setFilterCity(e.target.value);
+                  setPage(0);
                 }}
               >
-                {i + 1}
-              </Box>
-            ))}
+                <MenuItem value="">Όλες</MenuItem>
+                {cities.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel>Dealer</InputLabel>
+              <Select
+                value={filterDealer}
+                label="Dealer"
+                onChange={(e) => {
+                  setFilterDealer(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="">Όλοι</MenuItem>
+                {dealers.map((d) => (
+                  <MenuItem key={d.id} value={d.id}>
+                    {d.eponymia}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel>Network</InputLabel>
+              <Select
+                value={filterNetwork}
+                label="Network"
+                onChange={(e) => {
+                  setFilterNetwork(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="">Όλα</MenuItem>
+                {networks.map((n) => (
+                  <MenuItem key={n.id} value={n.id}>
+                    {n.eponymia}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Ενεργός</InputLabel>
+              <Select
+                value={filterActive}
+                label="Ενεργός"
+                onChange={(e) => {
+                  setFilterActive(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="">Όλοι</MenuItem>
+                <MenuItem value="true">Ναι</MenuItem>
+                <MenuItem value="false">Όχι</MenuItem>
+              </Select>
+            </FormControl>
+            {hasFilters && (
+              <Button
+                size="small"
+                onClick={clearFilters}
+                sx={{ color: "#9ca3af", fontSize: 12 }}
+              >
+                Καθαρισμός ✕
+              </Button>
+            )}
           </Stack>
-        </Box>
-      </Paper>
-    </Box>
+        </Paper>
 
-    <ConfirmDialog
-      open={deleteTarget !== null}
-      title="Διαγραφή πελάτη"
-      message="Είστε σίγουροι ότι θέλετε να διαγράψετε αυτόν τον πελάτη; Η ενέργεια δεν αναιρείται."
-      onConfirm={handleConfirmDelete}
-      onCancel={() => setDeleteTarget(null)}
-      loading={deleteLoading}
-    />
+        {/* Table */}
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 2,
+            border: "0.5px solid #e5e7eb",
+            overflow: "hidden",
+          }}
+        >
+          {isLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <Box sx={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#fafafa" }}>
+                    {[
+                      "ΑΦΜ",
+                      "Επωνυμία",
+                      "Πόλη",
+                      "Dealer",
+                      "Network",
+                      "Ενεργός",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "left",
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          fontWeight: 500,
+                          borderBottom: "0.5px solid #e5e7eb",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          padding: 40,
+                          textAlign: "center",
+                          color: "#9ca3af",
+                          fontSize: 14,
+                        }}
+                      >
+                        Δεν βρέθηκαν εγγραφές
+                      </td>
+                    </tr>
+                  ) : (
+                    customers.map((c) => (
+                      <tr
+                        key={c.id}
+                        style={{ borderBottom: "0.5px solid #f3f4f6" }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "#f9fafb")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontFamily: "monospace",
+                            fontSize: 12,
+                            color: "#6b7280",
+                          }}
+                        >
+                          {c.afm}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
+                        >
+                          {c.eponymia}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 13,
+                            color: "#374151",
+                          }}
+                        >
+                          {c.city}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 12,
+                            color: "#6b7280",
+                          }}
+                        >
+                          {c.dealerName || "—"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 12,
+                            color: "#6b7280",
+                          }}
+                        >
+                          {c.networkName || "—"}
+                        </td>
+                        <td style={{ padding: "11px 16px" }}>
+                          <Chip
+                            label={c.active ? "Ναι" : "Όχι"}
+                            size="small"
+                            sx={{
+                              fontSize: 11,
+                              height: 22,
+                              background: c.active ? "#dcfce7" : "#fee2e2",
+                              color: c.active ? "#166534" : "#991b1b",
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "11px 16px" }}>
+                          <Tooltip title="Διόρθωση">
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                navigate(`/customers/${c.id}/edit`)
+                              }
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#f59e0b" },
+                              }}
+                            >
+                              <EditIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Διαγραφή">
+                            <IconButton
+                              size="small"
+                              onClick={() => setDeleteTarget(c.id)}
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#ef4444" },
+                              }}
+                            >
+                              <DeleteIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </Box>
+          )}
 
-    <Snackbar
-      open={!!errorSnack}
-      autoHideDuration={4000}
-      onClose={() => setErrorSnack("")}
-      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-    >
-      <Alert severity="error" onClose={() => setErrorSnack("")} sx={{ width: "100%" }}>
-        {errorSnack}
-      </Alert>
-    </Snackbar>
+          {/* Pagination */}
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderTop: "0.5px solid #e5e7eb",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>
+              {total === 0
+                ? "0"
+                : `${page * PER_PAGE + 1}–${Math.min((page + 1) * PER_PAGE, total)}`}{" "}
+              από {total} εγγραφές
+            </Typography>
+            <Stack direction="row" spacing={0.5}>
+              {[...Array(totalPages)].map((_, i) => (
+                <Box
+                  key={i}
+                  onClick={() => setPage(i)}
+                  sx={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontWeight: page === i ? 600 : 400,
+                    background: page === i ? "#1f6feb" : "transparent",
+                    color: page === i ? "#fff" : "#6b7280",
+                    border: "0.5px solid",
+                    borderColor: page === i ? "#1f6feb" : "#e5e7eb",
+                  }}
+                >
+                  {i + 1}
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        </Paper>
+      </Box>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Διαγραφή πελάτη"
+        message="Είστε σίγουροι ότι θέλετε να διαγράψετε αυτόν τον πελάτη; Η ενέργεια δεν αναιρείται."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleteLoading}
+      />
+
+      <Snackbar
+        open={!!errorSnack}
+        autoHideDuration={4000}
+        onClose={() => setErrorSnack("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="error"
+          onClose={() => setErrorSnack("")}
+          sx={{ width: "100%" }}
+        >
+          {errorSnack}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

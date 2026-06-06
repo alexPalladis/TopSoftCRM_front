@@ -361,7 +361,7 @@ export default function NetworkDealersPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          Νέος dealer
+          ΠΡΟΣΘΗΚΗ DEALER
         </Button>
       </Box>
 

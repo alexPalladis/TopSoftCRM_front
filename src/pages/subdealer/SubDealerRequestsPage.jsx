@@ -26,35 +26,29 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PendingIcon from "@mui/icons-material/Pending";
 import { ticketsApi } from "../../services/tickets";
 import { useAuth } from "../../context/AuthContext";
 import { dealersApi } from "../../services/dealers";
-import { networksApi } from "../../services/networks";
 import { subdealersApi } from "../../services/subdealers";
+import { networksApi } from "../../services/networks";
+
+const PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
   { value: "PENDING", label: "Σε εκκρεμότητα" },
   { value: "DONE", label: "Ολοκληρώθηκε" },
 ];
 
+// SubDealer can send requests TO: Network, Dealer, or another SubDealer
 const ENTITY_OPTIONS = [
   { value: "NETWORK", label: "Network" },
   { value: "DEALER", label: "Dealer" },
   { value: "SUBDEALER", label: "SubDealer" },
 ];
-
-function formatFrom(type, name) {
-  const labels = {
-    ADMIN: "Admin",
-    NETWORK: "Network",
-    DEALER: "Dealer",
-    SUBDEALER: "SubDealer",
-  };
-  return `${labels[type] || type}, ${name || "—"}`;
-}
 
 const entityColors = {
   ADMIN: { bg: "#fee2e2", color: "#991b1b" },
@@ -63,10 +57,185 @@ const entityColors = {
   SUBDEALER: { bg: "#fef3c7", color: "#d97706" },
 };
 
-// ─── Ticket Form Dialog ───────────────────────────────────────────
+const entityLabels = {
+  ADMIN: "Admin",
+  NETWORK: "Network",
+  DEALER: "Dealer",
+  SUBDEALER: "SubDealer",
+};
+
+function formatEntity(type, name) {
+  return `${entityLabels[type] || type}, ${name || "—"}`;
+}
+
+// ─── View Dialog ──────────────────────────────────────────────
+function TicketViewDialog({ ticket, open, onClose, onComplete, canAct }) {
+  if (!ticket) return null;
+  const fromColors = entityColors[ticket.fromType] || entityColors.SUBDEALER;
+  const toColors = entityColors[ticket.toType] || entityColors.SUBDEALER;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
+    >
+      <DialogTitle
+        sx={{
+          pb: 1,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
+        <Box>
+          <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>
+            {ticket.subject}
+          </Typography>
+          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
+            {ticket.createdAt?.slice(0, 10)}
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          <Chip
+            label={
+              ticket.status === "PENDING" ? "Σε εκκρεμότητα" : "Ολοκληρώθηκε"
+            }
+            size="small"
+            icon={
+              ticket.status === "PENDING" ? (
+                <PendingIcon />
+              ) : (
+                <CheckCircleIcon />
+              )
+            }
+            sx={{
+              background: ticket.status === "PENDING" ? "#fef3c7" : "#dcfce7",
+              color: ticket.status === "PENDING" ? "#d97706" : "#166534",
+              fontSize: 11,
+            }}
+          />
+          <IconButton size="small" onClick={onClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2 }}>
+        <Box sx={{ display: "flex", gap: 2, mb: 2.5 }}>
+          {[
+            {
+              label: "Αίτημα από",
+              colors: fromColors,
+              name: ticket.fromName,
+              type: ticket.fromType,
+            },
+            {
+              label: "Αίτημα προς",
+              colors: toColors,
+              name: ticket.toName,
+              type: ticket.toType,
+            },
+          ].map((side, i) => (
+            <Box
+              key={i}
+              sx={{
+                flex: 1,
+                background: "#f9fafb",
+                border: "0.5px solid #e5e7eb",
+                borderRadius: 2,
+                p: 1.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  mb: 0.8,
+                }}
+              >
+                {side.label}
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Avatar
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    background: side.colors.bg,
+                    color: side.colors.color,
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {side.name?.charAt(0)}
+                </Avatar>
+                <Typography
+                  sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
+                >
+                  {formatEntity(side.type, side.name)}
+                </Typography>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+        <Box
+          sx={{
+            background: "#f9fafb",
+            border: "0.5px solid #e5e7eb",
+            borderRadius: 2,
+            p: 2,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 11,
+              color: "#9ca3af",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              mb: 1,
+            }}
+          >
+            Αίτημα
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
+            {ticket.body}
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 2,
+          borderTop: "0.5px solid #e5e7eb",
+          justifyContent: "space-between",
+        }}
+      >
+        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
+          Κλείσιμο
+        </Button>
+        {canAct && ticket.status === "PENDING" && (
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<CheckCircleIcon />}
+            onClick={() => onComplete(ticket.id)}
+            sx={{ background: "#16a34a", "&:hover": { background: "#15803d" } }}
+          >
+            Ολοκλήρωση
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ─── Form Dialog ──────────────────────────────────────────────
 function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
   const isEdit = !!ticket;
-
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     toType: "",
@@ -107,10 +276,9 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
   useEffect(() => {
     if (!form.toType) {
       setOptions([]);
-      if (!isEdit) setForm((p) => ({ ...p, toId: "" }));
       return;
     }
-    const fetch = async () => {
+    const load = async () => {
       try {
         let res;
         if (form.toType === "NETWORK")
@@ -124,7 +292,7 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
         );
       } catch {}
     };
-    fetch();
+    load();
   }, [form.toType]);
 
   const validate = () => {
@@ -145,8 +313,8 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
     setLoading(true);
     try {
       const payload = {
-        fromType: currentUser?.role || "ADMIN",
-        fromId: currentUser?.id || "00000001",
+        fromType: currentUser?.role || "SUBDEALER",
+        fromId: currentUser?.id,
         toType: form.toType,
         toId: form.toId,
         subject: form.subject,
@@ -194,7 +362,6 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={2}>
-          {/* Ημερομηνία */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{ fontSize: 12, color: "#374151", mb: 0.5, fontWeight: 500 }}
@@ -219,8 +386,6 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               }}
             />
           </Grid>
-
-          {/* Κατάσταση */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{ fontSize: 12, color: "#374151", mb: 0.5, fontWeight: 500 }}
@@ -230,10 +395,10 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
             <FormControl fullWidth size="small">
               <Select
                 value={form.status}
+                sx={{ borderRadius: 1.5, fontSize: 13 }}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, status: e.target.value }))
                 }
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
               >
                 {STATUS_OPTIONS.map((o) => (
                   <MenuItem key={o.value} value={o.value}>
@@ -243,8 +408,6 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               </Select>
             </FormControl>
           </Grid>
-
-          {/* Αίτημα προς */}
           <Grid item xs={12} md={5}>
             <Typography
               sx={{
@@ -259,12 +422,12 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
             <FormControl fullWidth size="small" error={!!errors.toType}>
               <Select
                 value={form.toType}
+                displayEmpty
+                sx={{ borderRadius: 1.5, fontSize: 13 }}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, toType: e.target.value, toId: "" }));
                   setErrors((p) => ({ ...p, toType: "" }));
                 }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
               >
                 <MenuItem value="">
                   <em>— Επιλογή —</em>
@@ -282,8 +445,6 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               </Typography>
             )}
           </Grid>
-
-          {/* Επωνυμία */}
           <Grid item xs={12} md={7}>
             <Typography
               sx={{
@@ -303,18 +464,16 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
             >
               <Select
                 value={form.toId}
+                displayEmpty
+                sx={{ borderRadius: 1.5, fontSize: 13 }}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, toId: e.target.value }));
                   setErrors((p) => ({ ...p, toId: "" }));
                 }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
               >
                 <MenuItem value="">
                   <em>
-                    {form.toType
-                      ? "— Επιλογή επωνυμίας —"
-                      : "— Επιλέξτε τύπο πρώτα —"}
+                    {form.toType ? "— Επιλογή —" : "— Επιλέξτε τύπο πρώτα —"}
                   </em>
                 </MenuItem>
                 {options.map((o) => (
@@ -330,8 +489,6 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               </Typography>
             )}
           </Grid>
-
-          {/* Θέμα */}
           <Grid item xs={12}>
             <Typography
               sx={{
@@ -347,21 +504,14 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               fullWidth
               size="small"
               value={form.subject}
+              error={!!errors.subject}
+              sx={inputSx}
               onChange={(e) => {
                 setForm((p) => ({ ...p, subject: e.target.value }));
                 setErrors((p) => ({ ...p, subject: "" }));
               }}
-              error={!!errors.subject}
-              sx={inputSx}
             />
-            {errors.subject && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.subject}
-              </Typography>
-            )}
           </Grid>
-
-          {/* Αίτημα */}
           <Grid item xs={12}>
             <Typography
               sx={{
@@ -379,22 +529,13 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               rows={4}
               size="small"
               value={form.body}
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: { notched: true },
-              }}
+              error={!!errors.body}
+              sx={inputSx}
               onChange={(e) => {
                 setForm((p) => ({ ...p, body: e.target.value }));
                 setErrors((p) => ({ ...p, body: "" }));
               }}
-              error={!!errors.body}
-              sx={inputSx}
             />
-            {errors.body && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.body}
-              </Typography>
-            )}
           </Grid>
         </Grid>
       </DialogContent>
@@ -409,207 +550,15 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
           onClick={handleSubmit}
           sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
         >
-          {loading ? "Αποθήκευση..." : isEdit ? "Αποθήκευση" : "Αποστολή"}
+          {loading ? "Αποστολή..." : isEdit ? "Αποθήκευση" : "Αποστολή"}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
 
-// ─── View Dialog ──────────────────────────────────────────────────
-function TicketViewDialog({ ticket, open, onClose, onComplete }) {
-  if (!ticket) return null;
-  const fromColors = entityColors[ticket.fromType] || entityColors.ADMIN;
-  const toColors = entityColors[ticket.toType] || entityColors.ADMIN;
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>
-            {ticket.subject}
-          </Typography>
-          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-            {ticket.createdAt?.slice(0, 16).replace("T", " ")}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Chip
-            label={
-              ticket.status === "PENDING" ? "Σε εκκρεμότητα" : "Ολοκληρώθηκε"
-            }
-            size="small"
-            icon={
-              ticket.status === "PENDING" ? (
-                <PendingIcon />
-              ) : (
-                <CheckCircleIcon />
-              )
-            }
-            sx={{
-              background: ticket.status === "PENDING" ? "#fef3c7" : "#dcfce7",
-              color: ticket.status === "PENDING" ? "#d97706" : "#166534",
-              fontSize: 11,
-            }}
-          />
-          <IconButton size="small" onClick={onClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Box sx={{ display: "flex", gap: 2, mb: 2.5 }}>
-          <Box
-            sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
-              }}
-            >
-              Αίτημα από
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 26,
-                  height: 26,
-                  background: fromColors.bg,
-                  color: fromColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {ticket.fromName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatFrom(ticket.fromType, ticket.fromName)}
-              </Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", color: "#9ca3af" }}>
-            →
-          </Box>
-          <Box
-            sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
-              }}
-            >
-              Αίτημα προς
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 26,
-                  height: 26,
-                  background: toColors.bg,
-                  color: toColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {ticket.toName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatFrom(ticket.toType, ticket.toName)}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-        <Box
-          sx={{
-            background: "#f9fafb",
-            border: "0.5px solid #e5e7eb",
-            borderRadius: 2,
-            p: 2,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: "#9ca3af",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              mb: 1,
-            }}
-          >
-            Αίτημα
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
-            {ticket.body}
-          </Typography>
-        </Box>
-      </DialogContent>
-      <DialogActions
-        sx={{
-          px: 3,
-          py: 2,
-          borderTop: "0.5px solid #e5e7eb",
-          justifyContent: "space-between",
-        }}
-      >
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Κλείσιμο
-        </Button>
-        {ticket.status === "PENDING" && (
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<CheckCircleIcon />}
-            onClick={() => onComplete(ticket.id)}
-            sx={{ background: "#16a34a", "&:hover": { background: "#15803d" } }}
-          >
-            Ολοκλήρωση
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────
-export default function RequestsPage() {
+// ─── Main Page ────────────────────────────────────────────────
+export default function SubDealerRequestsPage() {
   const { user } = useAuth();
 
   const [tickets, setTickets] = useState([]);
@@ -617,23 +566,30 @@ export default function RequestsPage() {
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(0);
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [page, setPage] = useState(0);
 
   const [viewTicket, setViewTicket] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [formTicket, setFormTicket] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  const PER_PAGE = 10;
-
+  // Server-side filtering — backend scopes by (fromId OR toId = user.id)
+  // so SUBDEALER only ever sees their own tickets.
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await ticketsApi.getAll({ page, size: PER_PAGE });
+      const params = {
+        page,
+        size: PER_PAGE,
+        ...(filterStatus && { status: filterStatus }),
+        ...(filterDateFrom && { dateFrom: filterDateFrom }),
+        ...(filterDateTo && { dateTo: filterDateTo }),
+      };
+      const res = await ticketsApi.getAll(params);
       setTickets(res.data.content);
       setTotal(res.data.totalElements);
       setTotalPages(res.data.totalPages);
@@ -642,11 +598,16 @@ export default function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, filterStatus, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setPage(0);
+  };
 
   const handleComplete = async (id) => {
     try {
@@ -670,24 +631,13 @@ export default function RequestsPage() {
     }
   };
 
-  const openNew = () => {
-    setFormTicket(null);
-    setFormOpen(true);
+  const clearFilters = () => {
+    setFilterStatus("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setPage(0);
   };
-  const openEdit = (t) => {
-    setFormTicket(t);
-    setFormOpen(true);
-  };
-
-  // Client-side φίλτρα ημερομηνίας & κατάστασης
-  const filtered = tickets.filter((t) => {
-    const date = t.createdAt?.slice(0, 10) || "";
-    const matchFrom = !filterDateFrom || date >= filterDateFrom;
-    const matchTo = !filterDateTo || date <= filterDateTo;
-    const matchStatus = !filterStatus || t.status === filterStatus;
-    return matchFrom && matchTo && matchStatus;
-  });
-
+  const hasFilters = filterStatus || filterDateFrom || filterDateTo;
   const pendingCount = tickets.filter((t) => t.status === "PENDING").length;
 
   const thStyle = {
@@ -735,13 +685,16 @@ export default function RequestsPage() {
             )}
           </Box>
           <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές
+            Αιτήματα που στείλατε ή σας απευθύνονται
           </Typography>
         </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={openNew}
+          onClick={() => {
+            setFormTicket(null);
+            setFormOpen(true);
+          }}
           sx={{
             background: "#1f6feb",
             borderRadius: 2,
@@ -749,7 +702,7 @@ export default function RequestsPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          ΝΕΟ ΑΙΤΗΜΑ
+          Ω
         </Button>
       </Box>
 
@@ -759,7 +712,7 @@ export default function RequestsPage() {
         </Alert>
       )}
 
-      {/* Φίλτρα */}
+      {/* Filters */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -776,11 +729,13 @@ export default function RequestsPage() {
             label="Από ημερομηνία"
             type="date"
             value={filterDateFrom}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateFrom)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
             }}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
             sx={{
               width: 170,
               "& .MuiOutlinedInput-root": {
@@ -795,7 +750,9 @@ export default function RequestsPage() {
             label="Έως ημερομηνία"
             type="date"
             value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateTo)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
@@ -814,8 +771,10 @@ export default function RequestsPage() {
             <Select
               value={filterStatus}
               label="Κατάσταση"
-              onChange={(e) => setFilterStatus(e.target.value)}
               sx={{ borderRadius: 1.5 }}
+              onChange={(e) =>
+                handleFilterChange(setFilterStatus)(e.target.value)
+              }
             >
               <MenuItem value="">Όλα</MenuItem>
               {STATUS_OPTIONS.map((o) => (
@@ -825,14 +784,10 @@ export default function RequestsPage() {
               ))}
             </Select>
           </FormControl>
-          {(filterDateFrom || filterDateTo || filterStatus) && (
+          {hasFilters && (
             <Button
               size="small"
-              onClick={() => {
-                setFilterDateFrom("");
-                setFilterDateTo("");
-                setFilterStatus("");
-              }}
+              onClick={clearFilters}
               sx={{ color: "#9ca3af", fontSize: 12 }}
             >
               Καθαρισμός ✕
@@ -841,7 +796,7 @@ export default function RequestsPage() {
         </Stack>
       </Paper>
 
-      {/* Πίνακας */}
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -869,7 +824,7 @@ export default function RequestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {tickets.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
@@ -884,147 +839,170 @@ export default function RequestsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((t) => (
-                    <tr
-                      key={t.id}
-                      style={{
-                        borderBottom: "0.5px solid #f3f4f6",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                    >
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#6b7280",
-                          whiteSpace: "nowrap",
-                        }}
+                  tickets.map((t) => {
+                    const isMine = t.fromId === user?.id;
+                    return (
+                      <tr
+                        key={t.id}
+                        style={{ borderBottom: "0.5px solid #f3f4f6" }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "#f9fafb")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
                       >
-                        {t.createdAt?.slice(0, 10)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#374151",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {formatFrom(t.fromType, t.fromName)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#374151",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {formatFrom(t.toType, t.toName)}
-                      </td>
-                      <td style={{ padding: "11px 16px", maxWidth: 160 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#111827",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 160,
-                          }}
-                        >
-                          {t.subject}
-                        </Typography>
-                      </td>
-                      <td style={{ padding: "11px 16px", maxWidth: 200 }}>
-                        <Typography
-                          sx={{
+                        <td
+                          style={{
+                            padding: "11px 16px",
                             fontSize: 12,
                             color: "#6b7280",
                             whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 200,
                           }}
                         >
-                          {t.body}
-                        </Typography>
-                      </td>
-                      <td style={{ padding: "11px 16px" }}>
-                        <Chip
-                          label={
-                            t.status === "PENDING"
-                              ? "Σε εκκρεμότητα"
-                              : "Ολοκληρώθηκε"
-                          }
-                          size="small"
-                          sx={{
-                            fontSize: 11,
-                            height: 22,
-                            background:
-                              t.status === "PENDING" ? "#fef3c7" : "#dcfce7",
-                            color:
-                              t.status === "PENDING" ? "#d97706" : "#166534",
+                          {t.createdAt?.slice(0, 10)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 12,
+                            color: "#374151",
+                            whiteSpace: "nowrap",
                           }}
-                        />
-                      </td>
-                      <td
-                        style={{ padding: "11px 16px", whiteSpace: "nowrap" }}
-                      >
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setViewTicket(t);
-                              setViewOpen(true);
-                            }}
+                        >
+                          {formatEntity(t.fromType, t.fromName)}
+                          {isMine && (
+                            <Chip
+                              label="εγώ"
+                              size="small"
+                              sx={{
+                                ml: 0.5,
+                                fontSize: 10,
+                                height: 16,
+                                background: "#fef3c7",
+                                color: "#d97706",
+                              }}
+                            />
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            padding: "11px 16px",
+                            fontSize: 12,
+                            color: "#374151",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {formatEntity(t.toType, t.toName)}
+                        </td>
+                        <td style={{ padding: "11px 16px", maxWidth: 160 }}>
+                          <Typography
                             sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: "#111827",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: 160,
                             }}
                           >
-                            <CheckCircleIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Διόρθωση">
-                          <IconButton
-                            size="small"
-                            onClick={() => openEdit(t)}
+                            {t.subject}
+                          </Typography>
+                        </td>
+                        <td style={{ padding: "11px 16px", maxWidth: 200 }}>
+                          <Typography
                             sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#f59e0b" },
+                              fontSize: 12,
+                              color: "#6b7280",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: 200,
                             }}
                           >
-                            <EditIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Διαγραφή">
-                          <IconButton
+                            {t.body}
+                          </Typography>
+                        </td>
+                        <td style={{ padding: "11px 16px" }}>
+                          <Chip
+                            label={
+                              t.status === "PENDING"
+                                ? "Σε εκκρεμότητα"
+                                : "Ολοκληρώθηκε"
+                            }
                             size="small"
-                            onClick={() => handleDelete(t.id)}
                             sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#ef4444" },
+                              fontSize: 11,
+                              height: 22,
+                              background:
+                                t.status === "PENDING" ? "#fef3c7" : "#dcfce7",
+                              color:
+                                t.status === "PENDING" ? "#d97706" : "#166534",
                             }}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  ))
+                          />
+                        </td>
+                        <td
+                          style={{ padding: "11px 16px", whiteSpace: "nowrap" }}
+                        >
+                          <Tooltip title="Προβολή">
+                            <IconButton
+                              size="small"
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#1f6feb" },
+                              }}
+                              onClick={() => {
+                                setViewTicket({ ...t, isMine });
+                                setViewOpen(true);
+                              }}
+                            >
+                              <VisibilityIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          {/* Edit & Delete only for tickets the subdealer created themselves */}
+                          {isMine && (
+                            <>
+                              <Tooltip title="Διόρθωση">
+                                <IconButton
+                                  size="small"
+                                  sx={{
+                                    color: "#9ca3af",
+                                    "&:hover": { color: "#f59e0b" },
+                                  }}
+                                  onClick={() => {
+                                    setFormTicket(t);
+                                    setFormOpen(true);
+                                  }}
+                                >
+                                  <EditIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Διαγραφή">
+                                <IconButton
+                                  size="small"
+                                  sx={{
+                                    color: "#9ca3af",
+                                    "&:hover": { color: "#ef4444" },
+                                  }}
+                                  onClick={() => handleDelete(t.id)}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </Box>
         )}
+
+        {/* Pagination */}
         <Box
           sx={{
             px: 2,
@@ -1069,12 +1047,12 @@ export default function RequestsPage() {
         </Box>
       </Paper>
 
-      {/* Dialogs */}
       <TicketViewDialog
         ticket={viewTicket}
         open={viewOpen}
         onClose={() => setViewOpen(false)}
         onComplete={handleComplete}
+        canAct={viewTicket?.toId === user?.id}
       />
       <TicketFormDialog
         ticket={formTicket}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueries } from "@tanstack/react-query";
 import {
   Grid,
   Box,
@@ -22,99 +22,102 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const [stats, setStats] = useState(null);
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const { user, logout } = useAuth();
+  const role = user?.role;
 
-  useEffect(() => {
-    const role = user?.role;
-    const id = user?.id;
+  /*
+   * useQueries fires all four requests in parallel — same as your
+   * Promise.all() approach, but results are cached per queryKey.
+   *
+   * On revisit within 60s (staleTime set in main.jsx):
+   *   → stats render instantly from cache, no loading spinner.
+   * After 60s:
+   *   → cached data shows immediately, then silently revalidates in background.
+   *
+   * enabled: false skips the query entirely for roles that don't need it,
+   * instead of resolving a dummy Promise.resolve(null).
+   */
+  const results = useQueries({
+    queries: [
+      {
+        queryKey: ["dashboard", "customers"],
+        queryFn: () => customersApi.getAll({ page: 0, size: 5 }),
+      },
+      {
+        queryKey: ["dashboard", "dealers"],
+        queryFn: () => dealersApi.getAll({ page: 0, size: 1 }),
+        enabled: ["ADMIN", "NETWORK", "DEALER"].includes(role),
+      },
+      {
+        queryKey: ["dashboard", "networks"],
+        queryFn: () => networksApi.getAll({ page: 0, size: 1 }),
+        enabled: ["ADMIN", "NETWORK"].includes(role),
+      },
+      {
+        queryKey: ["dashboard", "pendingTickets"],
+        queryFn: () => ticketsApi.pendingCount(),
+      },
+    ],
+  });
 
-    const fetchAll = async () => {
-      setLoading(true);
+  const [custQ, dealerQ, networkQ, ticketQ] = results;
 
-      const promises = [
-        // Customers — όλοι βλέπουν (φιλτράρει το backend)
-        customersApi.getAll({ page: 0, size: 5 }).catch(() => null),
+  // Show full-page loader only on the very first load (no cached data yet)
+  const isFirstLoad = results.some((q) => q.isLoading);
+  // Show a soft error only if the primary customers query fails
+  const hasError = custQ.isError;
 
-        // Dealers — ADMIN, NETWORK, DEALER
-        ["ADMIN", "NETWORK", "DEALER"].includes(role)
-          ? dealersApi.getAll({ page: 0, size: 1 }).catch(() => null)
-          : Promise.resolve(null),
+  const stats = {
+    totalCustomers: custQ.data?.data?.totalElements ?? 0,
+    totalDealers: dealerQ.data?.data?.totalElements ?? 0,
+    totalNetworks: networkQ.data?.data?.totalElements ?? 0,
+    pendingTickets: ticketQ.data?.data ?? 0,
+  };
 
-        // Networks — ADMIN, NETWORK
-        ["ADMIN", "NETWORK"].includes(role)
-          ? networksApi.getAll({ page: 0, size: 1 }).catch(() => null)
-          : Promise.resolve(null),
+  const customers = custQ.data?.data?.content ?? [];
 
-        // Tickets pending count — όλοι
-        ticketsApi.pendingCount().catch(() => null),
-      ];
+  const statCards = [
+    {
+      label: "ΣΥΝΟΛΟ ΠΕΛΑΤΩΝ",
+      value: stats.totalCustomers.toLocaleString("el-GR"),
+      icon: <PeopleIcon />,
+      color: "#3b82f6",
+      delta: "",
+      up: true,
+      path: "/customers",
+    },
+    {
+      label: "ΕΝΕΡΓΟΙ DEALERS",
+      value: stats.totalDealers.toLocaleString("el-GR"),
+      icon: <StoreIcon />,
+      color: "#22c55e",
+      delta: "",
+      up: true,
+      path: "/dealers",
+    },
+    {
+      label: "Networks",
+      value: stats.totalNetworks.toLocaleString("el-GR"),
+      icon: <HubIcon />,
+      color: "#8b5cf6",
+      delta: "Σύνολο",
+      up: false,
+      path: "/networks",
+    },
+    {
+      label: "ΕΚΚΡΕΜΗ ΑΙΤΗΜΑΤΑ",
+      value: stats.pendingTickets.toLocaleString("el-GR"),
+      icon: <WarningAmberIcon />,
+      color: stats.pendingTickets > 0 ? "#ef4444" : "#22c55e",
+      delta: stats.pendingTickets > 0 ? "Χρειάζεται προσοχή" : "Όλα εντάξει",
+      up: false,
+      alert: stats.pendingTickets > 0,
+      path: "/requests",
+    },
+  ];
 
-      const [custRes, dealerRes, networkRes, ticketRes] =
-        await Promise.all(promises);
-
-      setStats({
-        totalCustomers: custRes?.data?.totalElements ?? 0,
-        totalDealers: dealerRes?.data?.totalElements ?? 0,
-        totalNetworks: networkRes?.data?.totalElements ?? 0,
-        pendingTickets: ticketRes?.data ?? 0,
-      });
-
-      if (custRes?.data?.content) setCustomers(custRes.data.content);
-      setLoading(false);
-    };
-
-    if (user) fetchAll();
-  }, [user]);
-
-  const statCards = stats
-    ? [
-        {
-          label: "Σύνολο πελατών",
-          value: stats.totalCustomers.toLocaleString("el-GR"),
-          icon: <PeopleIcon />,
-          color: "#3b82f6",
-          delta: "",
-          up: true,
-          path: "/customers",
-        },
-        {
-          label: "Ενεργοί dealers",
-          value: stats.totalDealers.toLocaleString("el-GR"),
-          icon: <StoreIcon />,
-          color: "#22c55e",
-          delta: "",
-          up: true,
-          path: "/dealers",
-        },
-        {
-          label: "Networks",
-          value: stats.totalNetworks.toLocaleString("el-GR"),
-          icon: <HubIcon />,
-          color: "#8b5cf6",
-          delta: "Σύνολο",
-          up: false,
-          path: "/networks",
-        },
-        {
-          label: "Εκκρεμή αιτήματα",
-          value: stats.pendingTickets.toLocaleString("el-GR"),
-          icon: <WarningAmberIcon />,
-          color: stats.pendingTickets > 0 ? "#ef4444" : "#22c55e",
-          delta:
-            stats.pendingTickets > 0 ? "Χρειάζεται προσοχή" : "Όλα εντάξει",
-          up: false,
-          alert: stats.pendingTickets > 0,
-          path: "/requests",
-        },
-      ]
-    : [];
-
-  if (loading) {
+  if (isFirstLoad) {
     return (
       <Box
         sx={{
@@ -131,9 +134,9 @@ export default function DashboardPage() {
 
   return (
     <Box>
-      {error && (
+      {hasError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          Σφάλμα φόρτωσης δεδομένων
         </Alert>
       )}
 
@@ -158,14 +161,10 @@ export default function DashboardPage() {
               }}
               onClick={() => navigate(s.path)}
             >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.8,
-                }}
-              >
-                <Box sx={{ color: s.color, opacity: 0.7, display: "flex" }}>{s.icon}</Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Box sx={{ color: s.color, opacity: 0.7, display: "flex" }}>
+                  {s.icon}
+                </Box>
                 <Typography
                   sx={{
                     fontSize: 11,
@@ -189,13 +188,7 @@ export default function DashboardPage() {
               >
                 {s.value}
               </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                 {s.up && (
                   <TrendingUpIcon sx={{ fontSize: 14, color: "#16a34a" }} />
                 )}

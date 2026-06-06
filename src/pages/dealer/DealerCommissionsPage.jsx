@@ -3,27 +3,28 @@ import {
   Box,
   Paper,
   Typography,
-  IconButton,
   Button,
   TextField,
   MenuItem,
   Select,
   FormControl,
   InputLabel,
-  Tooltip,
   Stack,
   CircularProgress,
   Alert,
-  Checkbox,
+  Chip,
 } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
+import LockIcon from "@mui/icons-material/Lock";
 import { commissionsApi } from "../../services/commissions";
-import { dealersApi } from "../../services/dealers";
-import { networksApi } from "../../services/networks";
 import { productsApi } from "../../services/products";
+import { useAuth } from "../../context/AuthContext";
 
-export default function CommissionsPage() {
+const PER_PAGE = 20;
+
+export default function DealerCommissionsPage() {
+  const { user } = useAuth();
+
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -31,45 +32,33 @@ export default function CommissionsPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(0);
 
+  // Filters — only date range and product per spec
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterProductId, setFilterProductId] = useState("");
-  const [filterNetworkId, setFilterNetworkId] = useState("");
-  const [filterDealerId, setFilterDealerId] = useState("");
 
   const [products, setProducts] = useState([]);
-  const [networks, setNetworks] = useState([]);
-  const [dealers, setDealers] = useState([]);
 
-  const PER_PAGE = 20;
-
+  // Load product list once for the filter dropdown
   useEffect(() => {
     productsApi
       .getAll()
       .then((r) => setProducts(r.data))
       .catch(() => {});
-    networksApi
-      .getAll({ size: 100 })
-      .then((r) => setNetworks(r.data.content))
-      .catch(() => {});
-    dealersApi
-      .getAll({ size: 100 })
-      .then((r) => setDealers(r.data.content))
-      .catch(() => {});
   }, []);
 
   const fetchRows = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
     setError("");
     try {
       const params = {
         page,
         size: PER_PAGE,
+        dealerId: user.id, // scoped to this dealer only
         ...(filterDateFrom && { dateFrom: filterDateFrom }),
         ...(filterDateTo && { dateTo: filterDateTo }),
         ...(filterProductId && { productId: filterProductId }),
-        ...(filterNetworkId && { networkId: filterNetworkId }),
-        ...(filterDealerId && { dealerId: filterDealerId }),
       };
       const res = await commissionsApi.getHistory(params);
       setRows(res.data.content);
@@ -80,69 +69,35 @@ export default function CommissionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    filterDateFrom,
-    filterDateTo,
-    filterProductId,
-    filterNetworkId,
-    filterDealerId,
-  ]);
+  }, [page, filterDateFrom, filterDateTo, filterProductId, user]);
 
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
 
-  const togglePaidDealer = async (id) => {
-    try {
-      const res = await commissionsApi.togglePaidDealer(id);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === id ? { ...r, paidDealer: res.data.paidDealer } : r,
-        ),
-      );
-    } catch {
-      alert("Σφάλμα");
-    }
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setPage(0);
   };
 
-  const togglePaidNetwork = async (id) => {
-    try {
-      const res = await commissionsApi.togglePaidNetwork(id);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === id ? { ...r, paidNetwork: res.data.paidNetwork } : r,
-        ),
-      );
-    } catch {
-      alert("Σφάλμα");
-    }
+  const clearFilters = () => {
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterProductId("");
+    setPage(0);
   };
+  const hasFilters = filterDateFrom || filterDateTo || filterProductId;
 
-  const updateReceipt = async (id, val) => {
-    setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, receipt: val } : r)),
-    );
-  };
+  // Totals — sum only for the current page (consistent with Admin CommissionsPage)
+  const totalDealerCommission = rows.reduce(
+    (s, r) => s + Number(r.dealerCommissionAmount || 0),
+    0,
+  );
+  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
-  const saveReceipt = async (id, val) => {
-    try {
-      await commissionsApi.updateReceipt(id, val);
-    } catch {
-      alert("Σφάλμα αποθήκευσης παραστατικού");
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Διαγραφή εγγραφής;")) return;
-    try {
-      await commissionsApi.deleteHistory(id);
-      fetchRows();
-    } catch (err) {
-      alert(err.response?.data?.error || "Σφάλμα");
-    }
-  };
-
+  // ── Excel export ────────────────────────────────────────────
+  // Dealer sees: Date, Product, Customer, AFM, Amount, Commission, Paid
+  // Does NOT see: receipt, network commission, delete — those are admin-only
   const exportExcel = () => {
     const header = [
       "Ημερομηνία",
@@ -150,13 +105,8 @@ export default function CommissionsPage() {
       "Πελάτης",
       "ΑΦΜ",
       "Ποσό",
-      "Dealer",
-      "Network",
       "Προμήθεια Dealer",
-      "Προμήθεια Network",
-      "Πληρώθηκε Dealer",
-      "Πληρώθηκε Network",
-      "Παραστατικό",
+      "Πληρώθηκε",
     ];
     const csvRows = [
       header.join(","),
@@ -167,38 +117,20 @@ export default function CommissionsPage() {
           `"${r.customerEponymia}"`,
           r.customerAfm,
           r.amount,
-          `"${r.dealerName}"`,
-          `"${r.networkName || ""}"`,
           r.dealerCommissionAmount,
-          r.networkCommissionAmount || 0,
           r.paidDealer ? "Ναι" : "Όχι",
-          r.paidNetwork ? "Ναι" : "Όχι",
-          `"${r.receipt || ""}"`,
         ].join(","),
       ),
     ];
-    const totalDC = rows.reduce(
-      (s, r) => s + Number(r.dealerCommissionAmount || 0),
-      0,
-    );
-    const totalNC = rows.reduce(
-      (s, r) => s + Number(r.networkCommissionAmount || 0),
-      0,
-    );
-    const totalA = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+    // Totals row
     csvRows.push(
       [
         "",
         "",
         "",
         "Σύνολα",
-        totalA.toFixed(2),
-        "",
-        "",
-        totalDC.toFixed(2),
-        totalNC.toFixed(2),
-        "",
-        "",
+        totalAmount.toFixed(2),
+        totalDealerCommission.toFixed(2),
         "",
       ].join(","),
     );
@@ -209,35 +141,10 @@ export default function CommissionsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "promithies.csv";
+    a.download = "promithies_dealer.csv";
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const clearFilters = () => {
-    setFilterDateFrom("");
-    setFilterDateTo("");
-    setFilterProductId("");
-    setFilterNetworkId("");
-    setFilterDealerId("");
-    setPage(0);
-  };
-  const hasFilters =
-    filterDateFrom ||
-    filterDateTo ||
-    filterProductId ||
-    filterNetworkId ||
-    filterDealerId;
-
-  const totalDealerCommission = rows.reduce(
-    (s, r) => s + Number(r.dealerCommissionAmount || 0),
-    0,
-  );
-  const totalNetworkCommission = rows.reduce(
-    (s, r) => s + Number(r.networkCommissionAmount || 0),
-    0,
-  );
-  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   const thStyle = {
     padding: "10px 12px",
@@ -267,6 +174,7 @@ export default function CommissionsPage() {
 
   return (
     <Box>
+      {/* Header */}
       <Box
         sx={{
           display: "flex",
@@ -283,14 +191,34 @@ export default function CommissionsPage() {
             {total} εγγραφές · Ενημερώνεται αυτόματα από την τιμολογιέρα
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<DownloadIcon />}
-          onClick={exportExcel}
-          sx={{ borderColor: "#e5e7eb", color: "#374151", borderRadius: 2 }}
-        >
-          ΕΞΑΓΩΓΗ EXCEL
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {/* Read-only badge */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+              px: 1.5,
+              py: 0.6,
+              borderRadius: 2,
+              background: "#f3f4f6",
+            }}
+          >
+            <LockIcon sx={{ fontSize: 13, color: "#9ca3af" }} />
+            <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>
+              Μόνο προβολή
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportExcel}
+            disabled={rows.length === 0}
+            sx={{ borderColor: "#e5e7eb", color: "#374151", borderRadius: 2 }}
+          >
+            ΕΞΑΓΩΓΗ EXCEL
+          </Button>
+        </Stack>
       </Box>
 
       {error && (
@@ -299,7 +227,7 @@ export default function CommissionsPage() {
         </Alert>
       )}
 
-      {/* Φίλτρα */}
+      {/* Filters — date range + product only */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -316,10 +244,9 @@ export default function CommissionsPage() {
             label="Από ημερομηνία"
             type="date"
             value={filterDateFrom}
-            onChange={(e) => {
-              setFilterDateFrom(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateFrom)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
@@ -338,10 +265,9 @@ export default function CommissionsPage() {
             label="Έως ημερομηνία"
             type="date"
             value={filterDateTo}
-            onChange={(e) => {
-              setFilterDateTo(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateTo)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
@@ -360,54 +286,15 @@ export default function CommissionsPage() {
             <Select
               value={filterProductId}
               label="Προϊόν"
-              onChange={(e) => {
-                setFilterProductId(e.target.value);
-                setPage(0);
-              }}
               sx={{ borderRadius: 1.5 }}
+              onChange={(e) =>
+                handleFilterChange(setFilterProductId)(e.target.value)
+              }
             >
               <MenuItem value="">Όλα</MenuItem>
               {products.map((p) => (
                 <MenuItem key={p.id} value={p.id}>
                   {p.description}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
-            <InputLabel>Δίκτυο</InputLabel>
-            <Select
-              value={filterNetworkId}
-              label="Δίκτυο"
-              onChange={(e) => {
-                setFilterNetworkId(e.target.value);
-                setPage(0);
-              }}
-              sx={{ borderRadius: 1.5 }}
-            >
-              <MenuItem value="">Όλα</MenuItem>
-              {networks.map((n) => (
-                <MenuItem key={n.id} value={n.id}>
-                  {n.eponymia}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Dealer</InputLabel>
-            <Select
-              value={filterDealerId}
-              label="Dealer"
-              onChange={(e) => {
-                setFilterDealerId(e.target.value);
-                setPage(0);
-              }}
-              sx={{ borderRadius: 1.5 }}
-            >
-              <MenuItem value="">Όλοι</MenuItem>
-              {dealers.map((d) => (
-                <MenuItem key={d.id} value={d.id}>
-                  {d.eponymia}
                 </MenuItem>
               ))}
             </Select>
@@ -424,7 +311,7 @@ export default function CommissionsPage() {
         </Stack>
       </Paper>
 
-      {/* Πίνακας */}
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -450,24 +337,14 @@ export default function CommissionsPage() {
                   <th style={{ ...thStyle, textAlign: "right" }}>
                     Προμήθεια Dealer
                   </th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>
-                    Προμήθεια Network
-                  </th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>
-                    Πληρώθηκε Dealer
-                  </th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>
-                    Πληρώθηκε Network
-                  </th>
-                  <th style={thStyle}>Παραστατικό</th>
-                  <th style={thStyle}></th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>Πληρώθηκε</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={7}
                       style={{
                         padding: 40,
                         textAlign: "center",
@@ -489,9 +366,12 @@ export default function CommissionsPage() {
                         (e.currentTarget.style.background = "transparent")
                       }
                     >
+                      {/* Date */}
                       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                         {r.paymentDate}
                       </td>
+
+                      {/* Product */}
                       <td style={{ ...tdStyle, maxWidth: 160 }}>
                         <Typography
                           sx={{
@@ -505,6 +385,8 @@ export default function CommissionsPage() {
                           {r.productDescription}
                         </Typography>
                       </td>
+
+                      {/* Customer */}
                       <td
                         style={{
                           ...tdStyle,
@@ -515,6 +397,8 @@ export default function CommissionsPage() {
                       >
                         {r.customerEponymia}
                       </td>
+
+                      {/* AFM */}
                       <td
                         style={{
                           ...tdStyle,
@@ -525,6 +409,8 @@ export default function CommissionsPage() {
                       >
                         {r.customerAfm}
                       </td>
+
+                      {/* Amount */}
                       <td
                         style={{
                           ...tdStyle,
@@ -536,6 +422,8 @@ export default function CommissionsPage() {
                       >
                         €{Number(r.amount).toFixed(2)}
                       </td>
+
+                      {/* Dealer commission — read-only display */}
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         <Typography
                           sx={{
@@ -548,141 +436,30 @@ export default function CommissionsPage() {
                           €{Number(r.dealerCommissionAmount).toFixed(2)}
                         </Typography>
                         <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
-                          {r.dealerName} (
-                          {Number(r.dealerCommissionPct).toFixed(0)}%)
+                          {Number(r.dealerCommissionPct).toFixed(0)}%
                         </Typography>
                       </td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        {r.networkCommissionAmount > 0 ? (
-                          <>
-                            <Typography
-                              sx={{
-                                fontSize: 13,
-                                fontFamily: "monospace",
-                                fontWeight: 600,
-                                color: "#6d28d9",
-                              }}
-                            >
-                              €{Number(r.networkCommissionAmount).toFixed(2)}
-                            </Typography>
-                            <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
-                              {r.networkName} (
-                              {Number(r.networkCommissionPct).toFixed(0)}%)
-                            </Typography>
-                          </>
-                        ) : (
-                          <span style={{ color: "#d1d5db", fontSize: 12 }}>
-                            —
-                          </span>
-                        )}
-                      </td>
+
+                      {/* Paid status — read-only chip, no checkbox */}
                       <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 0.5,
-                          }}
-                        >
-                          <Checkbox
-                            checked={r.paidDealer}
-                            onChange={() => togglePaidDealer(r.id)}
-                            size="small"
-                            sx={{
-                              p: 0.3,
-                              color: "#d1d5db",
-                              "&.Mui-checked": { color: "#16a34a" },
-                            }}
-                          />
-                          <Typography
-                            sx={{
-                              fontSize: 11,
-                              color: r.paidDealer ? "#16a34a" : "#9ca3af",
-                              fontWeight: r.paidDealer ? 600 : 400,
-                            }}
-                          >
-                            {r.paidDealer ? "Ναι" : "Όχι"}
-                          </Typography>
-                        </Box>
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        {r.networkName ? (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 0.5,
-                            }}
-                          >
-                            <Checkbox
-                              checked={r.paidNetwork}
-                              onChange={() => togglePaidNetwork(r.id)}
-                              size="small"
-                              sx={{
-                                p: 0.3,
-                                color: "#d1d5db",
-                                "&.Mui-checked": { color: "#16a34a" },
-                              }}
-                            />
-                            <Typography
-                              sx={{
-                                fontSize: 11,
-                                color: r.paidNetwork ? "#16a34a" : "#9ca3af",
-                                fontWeight: r.paidNetwork ? 600 : 400,
-                              }}
-                            >
-                              {r.paidNetwork ? "Ναι" : "Όχι"}
-                            </Typography>
-                          </Box>
-                        ) : (
-                          <span style={{ color: "#d1d5db", fontSize: 12 }}>
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ ...tdStyle, minWidth: 120 }}>
-                        <TextField
+                        <Chip
+                          label={r.paidDealer ? "Ναι" : "Όχι"}
                           size="small"
-                          variant="standard"
-                          value={r.receipt || ""}
-                          onChange={(e) => updateReceipt(r.id, e.target.value)}
-                          onBlur={(e) => saveReceipt(r.id, e.target.value)}
-                          placeholder="—"
-                          inputProps={{
-                            style: { fontSize: 12, padding: "2px 4px" },
-                          }}
                           sx={{
-                            width: 110,
-                            "& .MuiInput-underline:before": {
-                              borderBottomColor: "#e5e7eb",
-                            },
-                            "& .MuiInput-underline:hover:before": {
-                              borderBottomColor: "#9ca3af",
-                            },
+                            fontSize: 11,
+                            height: 22,
+                            background: r.paidDealer ? "#dcfce7" : "#f3f4f6",
+                            color: r.paidDealer ? "#166534" : "#6b7280",
+                            fontWeight: r.paidDealer ? 600 : 400,
                           }}
                         />
-                      </td>
-                      <td style={tdStyle}>
-                        <Tooltip title="Διαγραφή">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(r.id)}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#ef4444" },
-                            }}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
 
+              {/* Totals footer */}
               {rows.length > 0 && (
                 <tfoot>
                   <tr style={{ borderTop: "2px solid #e5e7eb" }}>
@@ -711,19 +488,7 @@ export default function CommissionsPage() {
                     >
                       €{totalDealerCommission.toFixed(2)}
                     </td>
-                    <td
-                      style={{
-                        ...tfStyle,
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        color: "#6d28d9",
-                      }}
-                    >
-                      {totalNetworkCommission > 0
-                        ? `€${totalNetworkCommission.toFixed(2)}`
-                        : "—"}
-                    </td>
-                    <td colSpan={4} style={tfStyle}></td>
+                    <td style={tfStyle}></td>
                   </tr>
                 </tfoot>
               )}
@@ -731,7 +496,7 @@ export default function CommissionsPage() {
           </Box>
         )}
 
-        {/* Pagination + footer */}
+        {/* Pagination + footer note */}
         <Box
           sx={{
             px: 2,
@@ -744,8 +509,7 @@ export default function CommissionsPage() {
           }}
         >
           <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-            Οι εγγραφές έρχονται αυτόματα από την τιμολογιέρα · Μόνο διαγραφή,
-            checkboxes και παραστατικό επιτρέπονται
+            Οι εγγραφές έρχονται αυτόματα από την τιμολογιέρα · Μόνο ανάγνωση
           </Typography>
           <Stack direction="row" spacing={0.5}>
             {[...Array(totalPages)].map((_, i) => (

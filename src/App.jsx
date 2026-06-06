@@ -1,235 +1,329 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./context/AuthContext";
+import { Box, CircularProgress } from "@mui/material";
 import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import RoleRoute from "./routes/RoleRoute";
+
+// ─── LoginPage is NOT lazy — it's the entry point, loads immediately ───────
 import LoginPage from "./pages/login/LoginPage";
 
-// Layout
+// ─── Layout is NOT lazy — it wraps every protected page ────────────────────
 import AdminLayout from "./components/layout/AdminLayout";
 
-// ─── ADMIN pages ───────────────────────────────────────────────
-import DashboardPage from "./pages/admin/DashboardPage";
-import CustomersPage from "./pages/admin/CustomersPage";
-import CustomerFormPage from "./pages/admin/CustomerFormPage";
-import DealersPage from "./pages/admin/DealersPage";
-import DealerFormPage from "./pages/admin/DealerFormPage";
-import NetworksPage from "./pages/admin/NetworksPage";
-import NetworkFormPage from "./pages/admin/NetworkFormPage";
-import SubDealersPage from "./pages/admin/SubDealersPage";
-import SubDealerFormPage from "./pages/admin/SubDealerFormPage";
-import RequestsPage from "./pages/admin/RequestsPage";
-import CommissionsPage from "./pages/admin/CommissionsPage";
-import PricelistPage from "./pages/admin/PricelistPage";
-import ProfilePage from "./pages/admin/ProfilePage";
+// ─── ADMIN pages (lazy) ────────────────────────────────────────────────────
+const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
+const CustomersPage = lazy(() => import("./pages/admin/CustomersPage"));
+const CustomerFormPage = lazy(() => import("./pages/admin/CustomerFormPage"));
+const DealersPage = lazy(() => import("./pages/admin/DealersPage"));
+const DealerFormPage = lazy(() => import("./pages/admin/DealerFormPage"));
+const NetworksPage = lazy(() => import("./pages/admin/NetworksPage"));
+const NetworkFormPage = lazy(() => import("./pages/admin/NetworkFormPage"));
+const SubDealersPage = lazy(() => import("./pages/admin/SubDealersPage"));
+const SubDealerFormPage = lazy(() => import("./pages/admin/SubDealerFormPage"));
+const RequestsPage = lazy(() => import("./pages/admin/RequestsPage"));
+const CommissionsPage = lazy(() => import("./pages/admin/CommissionsPage"));
+const PricelistPage = lazy(() => import("./pages/admin/PricelistPage"));
+const ProfilePage = lazy(() => import("./pages/admin/ProfilePage"));
 
-// ─── NETWORK pages ─────────────────────────────────────────────
-import NetworkCustomersPage from "./pages/network/NetworkCustomersPage";
-import NetworkDealersPage from "./pages/network/NetworkDealersPage";
-import NetworkDealerFormPage from "./pages/network/NetworkDealerFormPage";
+// ─── NETWORK pages (lazy) ──────────────────────────────────────────────────
+const NetworkCustomersPage = lazy(
+  () => import("./pages/network/NetworkCustomersPage"),
+);
+const NetworkDealersPage = lazy(
+  () => import("./pages/network/NetworkDealersPage"),
+);
+const NetworkDealerFormPage = lazy(
+  () => import("./pages/network/NetworkDealerFormPage"),
+);
+const NetworkSubDealersPage = lazy(
+  () => import("./pages/network/NetworkSubDealersPage"),
+);
+const NetworkRequestsPage = lazy(
+  () => import("./pages/network/NetworkRequestsPage"),
+);
+const NetworkCommissionsPage = lazy(
+  () => import("./pages/network/NetworkCommissionsPage"),
+);
+const NetworkPricelistPage = lazy(
+  () => import("./pages/network/NetworkPricelistPage"),
+);
 
-import NetworkSubDealersPage from "./pages/network/NetworkSubDealersPage";
-// import NetworkSubDealerFormPage from './pages/network/NetworkSubDealerFormPage'
-import NetworkRequestsPage from "./pages/network/NetworkRequestsPage";
-import NetworkCommissionsPage from "./pages/network/NetworkCommissionsPage";
-import NetworkPricelistPage from "./pages/network/NetworkPricelistPage";
+// ─── DEALER pages (lazy) ───────────────────────────────────────────────────
+const DealerCustomersPage = lazy(
+  () => import("./pages/dealer/DealerCustomersPage"),
+);
+const DealerSubDealersPage = lazy(
+  () => import("./pages/dealer/DealerSubDealersPage"),
+);
+const DealerRequestsPage = lazy(
+  () => import("./pages/dealer/DealerRequestsPage"),
+);
+const DealerPricelistPage = lazy(
+  () => import("./pages/dealer/DealerPricelistPage"),
+);
+const DealerCommissionsPage = lazy(
+  () => import("./pages/dealer/DealerCommissionsPage"),
+);
+const DealerSubDealerFormPage = lazy(
+  () => import("./pages/dealer/DealerSubDealerFormPage"),
+);
 
-import DealerCustomersPage from "./pages/dealer/DealerCustomersPage";
-import DealerSubDealersPage from "./pages/dealer/DealerSubDealersPage";
-// import DealerSubDealerFormPage  from './pages/dealer/DealerSubDealerFormPage'
-// import DealerRequestsPage       from './pages/dealer/DealerRequestsPage'
-// import DealerCommissionsPage    from './pages/dealer/DealerCommissionsPage'
-// import DealerPricelistPage      from './pages/dealer/DealerPricelistPage'
+const SubDealerCustomersPage = lazy(
+  () => import("./pages/subdealer/SubDealerCustomersPage"),
+);
 
-// ─── SUBDEALER pages ───────────────────────────────────────────
-// TODO — θα προστεθούν όταν φτιαχτούν:
-// import SubDealerCustomersPage   from './pages/subdealer/SubDealerCustomersPage'
-// import SubDealerRequestsPage    from './pages/subdealer/SubDealerRequestsPage'
-// import SubDealerCommissionsPage from './pages/subdealer/SubDealerCommissionsPage'
+const SubDealerRequestsPage = lazy(
+  () => import("./pages/subdealer/SubDealerRequestsPage"),
+);
 
-// ─── RolePage helper ───────────────────────────────────────────
+// ─── Page loader — shown by Suspense while a chunk is downloading ──────────
+function PageLoader() {
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#0d1117",
+      }}
+    >
+      <CircularProgress size={32} sx={{ color: "#1f6feb" }} />
+    </Box>
+  );
+}
+
+// ─── RolePage — renders the correct page component based on user role ──────
+// Used for routes that have a different page per role (same URL, diff UI).
 function RolePage({ pages }) {
   const { user } = useAuth();
   const Page = pages[user?.role] || pages["ADMIN"] || Object.values(pages)[0];
   return <Page />;
 }
 
-// ─── App ───────────────────────────────────────────────────────
-export default function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPageRouter />} />
-
-          {/* Protected */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-
-            {/* Dashboard — κοινό, διαφορετικό περιεχόμενο ανά ρόλο μέσα */}
-            <Route path="dashboard" element={<DashboardPage />} />
-
-            {/* ── Customers ── */}
-            <Route
-              path="customers"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: CustomersPage,
-                    NETWORK: NetworkCustomersPage,
-                    DEALER: DealerCustomersPage,
-                    SUBDEALER: CustomersPage, // TODO: SubDealerCustomersPage
-                  }}
-                />
-              }
-            />
-            <Route path="customers/new" element={<CustomerFormPage />} />
-            <Route path="customers/:id/edit" element={<CustomerFormPage />} />
-
-            {/* ── Dealers ── */}
-            <Route
-              path="dealers"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: DealersPage,
-                    NETWORK: NetworkDealersPage,
-                    DEALER: DealersPage, // TODO: DealerSelfPage
-                  }}
-                />
-              }
-            />
-            <Route
-              path="dealers/new"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: DealerFormPage,
-                    NETWORK: NetworkDealerFormPage,
-                  }}
-                />
-              }
-            />
-            <Route
-              path="dealers/:id/edit"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: DealerFormPage,
-                    NETWORK: NetworkDealerFormPage,
-                  }}
-                />
-              }
-            />
-
-            {/* ── Networks ── */}
-            <Route path="networks" element={<NetworksPage />} />
-            <Route path="networks/new" element={<NetworkFormPage />} />
-            <Route path="networks/:id/edit" element={<NetworkFormPage />} />
-
-            {/* ── SubDealers ── */}
-            <Route
-              path="subdealers"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: SubDealersPage,
-                    NETWORK: NetworkSubDealersPage,
-                    DEALER: DealerSubDealersPage,
-                  }}
-                />
-              }
-            />
-            <Route
-              path="subdealers/new"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: SubDealerFormPage,
-                    NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
-                    DEALER: SubDealerFormPage, // TODO: DealerSubDealerFormPage
-                  }}
-                />
-              }
-            />
-            <Route
-              path="subdealers/:id/edit"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: SubDealerFormPage,
-                    NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
-                    DEALER: SubDealerFormPage, // TODO: DealerSubDealerFormPage
-                  }}
-                />
-              }
-            />
-
-            {/* ── Requests ── */}
-            <Route
-              path="requests"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: RequestsPage,
-                    NETWORK: NetworkRequestsPage,
-                    DEALER: RequestsPage, // TODO: DealerRequestsPage
-                    SUBDEALER: RequestsPage, // TODO: SubDealerRequestsPage
-                  }}
-                />
-              }
-            />
-
-            {/* ── Commissions ── */}
-            <Route
-              path="commissions"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: CommissionsPage,
-                    NETWORK: NetworkCommissionsPage,
-                    DEALER: CommissionsPage, // TODO: DealerCommissionsPage
-                  }}
-                />
-              }
-            />
-
-            {/* ── Pricelist ── */}
-            <Route
-              path="pricelist"
-              element={
-                <RolePage
-                  pages={{
-                    ADMIN: PricelistPage,
-                    NETWORK: NetworkPricelistPage,
-                    DEALER: PricelistPage, // TODO: DealerPricelistPage
-                  }}
-                />
-              }
-            />
-
-            {/* ── Profile — κοινό για όλους ── */}
-            <Route path="profile" element={<ProfilePage />} />
-          </Route>
-
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
-}
-
-// Login router — αν είσαι ήδη logged in πήγαινε στο dashboard
+// ─── LoginPageRouter — redirects to dashboard if already logged in ─────────
 function LoginPageRouter() {
   const { user } = useAuth();
   if (user) return <Navigate to="/dashboard" replace />;
   return <LoginPage />;
+}
+
+// ─── App ───────────────────────────────────────────────────────────────────
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        {/*
+          Suspense must wrap the Routes so it catches lazy chunks
+          for every route transition, not just the initial load.
+        */}
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* ── Public ── */}
+            <Route path="/login" element={<LoginPageRouter />} />
+
+            {/* ── Protected — all children share AdminLayout ── */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/dashboard" replace />} />
+
+              {/* Dashboard — all roles, content differs internally */}
+              <Route path="dashboard" element={<DashboardPage />} />
+
+              {/* ── Profile — all roles ── */}
+              <Route path="profile" element={<ProfilePage />} />
+
+              {/* ── Customers ── */}
+              <Route
+                path="customers"
+                element={
+                  <RolePage
+                    pages={{
+                      ADMIN: CustomersPage,
+                      NETWORK: NetworkCustomersPage,
+                      DEALER: DealerCustomersPage,
+                      SUBDEALER: SubDealerCustomersPage,
+                    }}
+                  />
+                }
+              />
+              <Route path="customers/new" element={<CustomerFormPage />} />
+              <Route path="customers/:id/edit" element={<CustomerFormPage />} />
+
+              {/* ── Networks — ADMIN only ── */}
+              <Route
+                path="networks"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN"]}>
+                    <NetworksPage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="networks/new"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN"]}>
+                    <NetworkFormPage />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="networks/:id/edit"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN"]}>
+                    <NetworkFormPage />
+                  </RoleRoute>
+                }
+              />
+
+              {/* ── Dealers — ADMIN + NETWORK ── */}
+              <Route
+                path="dealers"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: DealersPage,
+                        NETWORK: NetworkDealersPage,
+                        DEALER: DealersPage, // TODO: DealerSelfPage
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dealers/new"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: DealerFormPage,
+                        NETWORK: NetworkDealerFormPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="dealers/:id/edit"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: DealerFormPage,
+                        NETWORK: NetworkDealerFormPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+
+              {/* ── SubDealers — ADMIN + NETWORK + DEALER ── */}
+              <Route
+                path="subdealers"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: SubDealersPage,
+                        NETWORK: NetworkSubDealersPage,
+                        DEALER: DealerSubDealersPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="subdealers/new"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: SubDealerFormPage,
+                        NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
+                        DEALER: DealerSubDealerFormPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="subdealers/:id/edit"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: SubDealerFormPage,
+                        NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
+                        DEALER: DealerSubDealerFormPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+
+              {/* ── Requests — all roles ── */}
+              <Route
+                path="requests"
+                element={
+                  <RolePage
+                    pages={{
+                      ADMIN: RequestsPage,
+                      NETWORK: NetworkRequestsPage,
+                      DEALER: DealerRequestsPage,
+                      SUBDEALER: SubDealerRequestsPage,
+                    }}
+                  />
+                }
+              />
+
+              {/* ── Commissions — ADMIN + NETWORK + DEALER ── */}
+              <Route
+                path="commissions"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: CommissionsPage,
+                        NETWORK: NetworkCommissionsPage,
+                        DEALER: DealerCommissionsPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+
+              {/* ── Pricelist — ADMIN + NETWORK ── */}
+              <Route
+                path="pricelist"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
+                    <RolePage
+                      pages={{
+                        ADMIN: PricelistPage,
+                        NETWORK: NetworkPricelistPage,
+                        DEALER: DealerPricelistPage,
+                      }}
+                    />
+                  </RoleRoute>
+                }
+              />
+            </Route>
+            {/* end protected layout */}
+
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }

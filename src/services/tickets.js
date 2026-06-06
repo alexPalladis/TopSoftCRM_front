@@ -1,6 +1,7 @@
 import api from "./api";
 
 export const ticketsApi = {
+  // params may include: page, size, status, dateFrom, dateTo
   getAll: (params) => api.get("/tickets", { params }),
   getById: (id) => api.get(`/tickets/${id}`),
   create: (data) => api.post("/tickets", data),

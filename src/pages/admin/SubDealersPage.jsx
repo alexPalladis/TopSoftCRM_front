@@ -108,7 +108,7 @@ export default function SubDealersPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          Νέος sub-dealer
+          ΠΡΟΣΘΗΚΗ SUB-DEALER
         </Button>
       </Box>
 

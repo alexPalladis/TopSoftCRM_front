@@ -65,7 +65,7 @@ function formatEntity(type, name) {
   return `${entityLabels[type] || type}, ${name || "—"}`;
 }
 
-// ─── View Dialog ──────────────────────────────────────────────
+// ─── View Dialog (unchanged) ──────────────────────────────────
 function TicketViewDialog({ ticket, open, onClose, onComplete, canAct }) {
   if (!ticket) return null;
   const fromColors = entityColors[ticket.fromType] || entityColors.NETWORK;
@@ -122,89 +122,62 @@ function TicketViewDialog({ ticket, open, onClose, onComplete, canAct }) {
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         <Box sx={{ display: "flex", gap: 2, mb: 2.5 }}>
-          <Box
-            sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
-            }}
-          >
-            <Typography
+          {[
+            {
+              label: "Αίτημα από",
+              colors: fromColors,
+              name: ticket.fromName,
+              type: ticket.fromType,
+            },
+            {
+              label: "Αίτημα προς",
+              colors: toColors,
+              name: ticket.toName,
+              type: ticket.toType,
+            },
+          ].map((side, i) => (
+            <Box
+              key={i}
               sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
+                flex: 1,
+                background: "#f9fafb",
+                border: "0.5px solid #e5e7eb",
+                borderRadius: 2,
+                p: 1.5,
               }}
             >
-              Αίτημα από
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
+              <Typography
                 sx={{
-                  width: 26,
-                  height: 26,
-                  background: fromColors.bg,
-                  color: fromColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
+                  fontSize: 10,
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  mb: 0.8,
                 }}
               >
-                {ticket.fromName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatEntity(ticket.fromType, ticket.fromName)}
+                {side.label}
               </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Avatar
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    background: side.colors.bg,
+                    color: side.colors.color,
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {side.name?.charAt(0)}
+                </Avatar>
+                <Typography
+                  sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
+                >
+                  {formatEntity(side.type, side.name)}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", color: "#9ca3af" }}>
-            →
-          </Box>
-          <Box
-            sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
-              }}
-            >
-              Αίτημα προς
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 26,
-                  height: 26,
-                  background: toColors.bg,
-                  color: toColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {ticket.toName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatEntity(ticket.toType, ticket.toName)}
-              </Typography>
-            </Box>
-          </Box>
+          ))}
         </Box>
         <Box
           sx={{
@@ -241,7 +214,6 @@ function TicketViewDialog({ ticket, open, onClose, onComplete, canAct }) {
         <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
           Κλείσιμο
         </Button>
-        {/* Ολοκλήρωση μόνο αν απευθύνεται σε αυτόν (canAct) */}
         {canAct && ticket.status === "PENDING" && (
           <Button
             size="small"
@@ -258,10 +230,9 @@ function TicketViewDialog({ ticket, open, onClose, onComplete, canAct }) {
   );
 }
 
-// ─── Form Dialog ──────────────────────────────────────────────
+// ─── Form Dialog (unchanged) ──────────────────────────────────
 function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
   const isEdit = !!ticket;
-
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     toType: "",
@@ -448,12 +419,12 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
             <FormControl fullWidth size="small" error={!!errors.toType}>
               <Select
                 value={form.toType}
+                displayEmpty
+                sx={{ borderRadius: 1.5, fontSize: 13 }}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, toType: e.target.value, toId: "" }));
                   setErrors((p) => ({ ...p, toType: "" }));
                 }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
               >
                 <MenuItem value="">
                   <em>— Επιλογή —</em>
@@ -490,12 +461,12 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
             >
               <Select
                 value={form.toId}
+                displayEmpty
+                sx={{ borderRadius: 1.5, fontSize: 13 }}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, toId: e.target.value }));
                   setErrors((p) => ({ ...p, toId: "" }));
                 }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
               >
                 <MenuItem value="">
                   <em>
@@ -530,12 +501,12 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               fullWidth
               size="small"
               value={form.subject}
+              error={!!errors.subject}
+              sx={inputSx}
               onChange={(e) => {
                 setForm((p) => ({ ...p, subject: e.target.value }));
                 setErrors((p) => ({ ...p, subject: "" }));
               }}
-              error={!!errors.subject}
-              sx={inputSx}
             />
           </Grid>
           <Grid item xs={12}>
@@ -555,12 +526,12 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
               rows={4}
               size="small"
               value={form.body}
+              error={!!errors.body}
+              sx={inputSx}
               onChange={(e) => {
                 setForm((p) => ({ ...p, body: e.target.value }));
                 setErrors((p) => ({ ...p, body: "" }));
               }}
-              error={!!errors.body}
-              sx={inputSx}
             />
           </Grid>
         </Grid>
@@ -584,6 +555,8 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────
+const PER_PAGE = 10;
+
 export default function NetworkRequestsPage() {
   const { user } = useAuth();
 
@@ -592,28 +565,42 @@ export default function NetworkRequestsPage() {
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(0);
+
+  // ── Filters — all sent to the backend, no client-side filtering ───────────
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [page, setPage] = useState(0);
 
   const [viewTicket, setViewTicket] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [formTicket, setFormTicket] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  const PER_PAGE = 10;
-
+  /*
+   * fetchTickets passes all active filters as query params to the backend.
+   * The backend (TicketRepository.findByEntityFiltered) handles:
+   *   - ownership filter (fromId OR toId = current user)
+   *   - status filter
+   *   - date range filter
+   *   - pagination
+   *
+   * Pagination numbers shown to the user are now correct because totalElements
+   * comes from the already-filtered database count, not the raw total.
+   */
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await ticketsApi.getAll({ page, size: PER_PAGE });
-      // Φιλτράρισμα: βλέπει μόνο αυτά που έστειλε ή του απευθύνονται
-      const filtered = res.data.content.filter(
-        (t) => t.fromId === user?.id || t.toId === user?.id,
-      );
-      setTickets(filtered);
+      const params = {
+        page,
+        size: PER_PAGE,
+        ...(filterStatus && { status: filterStatus }),
+        ...(filterDateFrom && { dateFrom: filterDateFrom }),
+        ...(filterDateTo && { dateTo: filterDateTo }),
+      };
+      const res = await ticketsApi.getAll(params);
+      setTickets(res.data.content);
       setTotal(res.data.totalElements);
       setTotalPages(res.data.totalPages);
     } catch {
@@ -621,11 +608,18 @@ export default function NetworkRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, user]);
+  }, [page, filterStatus, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  // Reset to page 0 whenever a filter changes so we don't land on a
+  // non-existent page (e.g. was on page 3, filter returns only 1 page)
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setPage(0);
+  };
 
   const handleComplete = async (id) => {
     try {
@@ -649,15 +643,17 @@ export default function NetworkRequestsPage() {
     }
   };
 
-  // Client-side φίλτρα ημερομηνίας & κατάστασης
-  const filtered = tickets.filter((t) => {
-    const date = t.createdAt?.slice(0, 10) || "";
-    const matchFrom = !filterDateFrom || date >= filterDateFrom;
-    const matchTo = !filterDateTo || date <= filterDateTo;
-    const matchStatus = !filterStatus || t.status === filterStatus;
-    return matchFrom && matchTo && matchStatus;
-  });
+  const clearFilters = () => {
+    setFilterStatus("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setPage(0);
+  };
 
+  const hasFilters = filterStatus || filterDateFrom || filterDateTo;
+
+  // pendingCount is derived from the current (filtered or unfiltered) results.
+  // When no status filter is active it reflects the true pending count on screen.
   const pendingCount = tickets.filter((t) => t.status === "PENDING").length;
 
   const thStyle = {
@@ -675,6 +671,7 @@ export default function NetworkRequestsPage() {
 
   return (
     <Box>
+      {/* Header */}
       <Box
         sx={{
           display: "flex",
@@ -721,7 +718,7 @@ export default function NetworkRequestsPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          Νέο αίτημα
+          Ω
         </Button>
       </Box>
 
@@ -731,6 +728,7 @@ export default function NetworkRequestsPage() {
         </Alert>
       )}
 
+      {/* Filters — values go to backend, not JS array.filter() */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -747,7 +745,9 @@ export default function NetworkRequestsPage() {
             label="Από ημερομηνία"
             type="date"
             value={filterDateFrom}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateFrom)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
@@ -766,7 +766,9 @@ export default function NetworkRequestsPage() {
             label="Έως ημερομηνία"
             type="date"
             value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateTo)(e.target.value)
+            }
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
@@ -785,8 +787,10 @@ export default function NetworkRequestsPage() {
             <Select
               value={filterStatus}
               label="Κατάσταση"
-              onChange={(e) => setFilterStatus(e.target.value)}
               sx={{ borderRadius: 1.5 }}
+              onChange={(e) =>
+                handleFilterChange(setFilterStatus)(e.target.value)
+              }
             >
               <MenuItem value="">Όλα</MenuItem>
               {STATUS_OPTIONS.map((o) => (
@@ -796,14 +800,10 @@ export default function NetworkRequestsPage() {
               ))}
             </Select>
           </FormControl>
-          {(filterDateFrom || filterDateTo || filterStatus) && (
+          {hasFilters && (
             <Button
               size="small"
-              onClick={() => {
-                setFilterDateFrom("");
-                setFilterDateTo("");
-                setFilterStatus("");
-              }}
+              onClick={clearFilters}
               sx={{ color: "#9ca3af", fontSize: 12 }}
             >
               Καθαρισμός ✕
@@ -812,6 +812,7 @@ export default function NetworkRequestsPage() {
         </Stack>
       </Paper>
 
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -839,7 +840,7 @@ export default function NetworkRequestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {tickets.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
@@ -854,8 +855,8 @@ export default function NetworkRequestsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((t) => {
-                    const isMine = t.fromId === user?.id; // Το έστειλε ο ίδιος
+                  tickets.map((t) => {
+                    const isMine = t.fromId === user?.id;
                     return (
                       <tr
                         key={t.id}
@@ -963,31 +964,30 @@ export default function NetworkRequestsPage() {
                           <Tooltip title="Προβολή">
                             <IconButton
                               size="small"
-                              onClick={() => {
-                                setViewTicket({ ...t, isMine });
-                                setViewOpen(true);
-                              }}
                               sx={{
                                 color: "#9ca3af",
                                 "&:hover": { color: "#1f6feb" },
+                              }}
+                              onClick={() => {
+                                setViewTicket({ ...t, isMine });
+                                setViewOpen(true);
                               }}
                             >
                               <VisibilityIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Tooltip>
-                          {/* Διόρθωση & Διαγραφή ΜΟΝΟ αν το έστειλε ο ίδιος */}
                           {isMine && (
                             <>
                               <Tooltip title="Διόρθωση">
                                 <IconButton
                                   size="small"
-                                  onClick={() => {
-                                    setFormTicket(t);
-                                    setFormOpen(true);
-                                  }}
                                   sx={{
                                     color: "#9ca3af",
                                     "&:hover": { color: "#f59e0b" },
+                                  }}
+                                  onClick={() => {
+                                    setFormTicket(t);
+                                    setFormOpen(true);
                                   }}
                                 >
                                   <EditIcon sx={{ fontSize: 16 }} />
@@ -996,11 +996,11 @@ export default function NetworkRequestsPage() {
                               <Tooltip title="Διαγραφή">
                                 <IconButton
                                   size="small"
-                                  onClick={() => handleDelete(t.id)}
                                   sx={{
                                     color: "#9ca3af",
                                     "&:hover": { color: "#ef4444" },
                                   }}
+                                  onClick={() => handleDelete(t.id)}
                                 >
                                   <DeleteIcon sx={{ fontSize: 16 }} />
                                 </IconButton>
@@ -1016,6 +1016,8 @@ export default function NetworkRequestsPage() {
             </table>
           </Box>
         )}
+
+        {/* Pagination */}
         <Box
           sx={{
             px: 2,
