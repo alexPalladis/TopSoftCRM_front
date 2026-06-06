@@ -29,6 +29,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
 import { subdealersApi } from "../../services/subdealers";
+import { commissionsApi } from "../../services/commissions";
 import { useAuth } from "../../context/AuthContext";
 
 const PRODUCTS = [
@@ -42,13 +43,7 @@ const PRODUCTS = [
   { id: 8, description: "Ψηφιακό Πελατολόγιο", defaultPrice: 50 },
 ];
 
-const mockCommissions = PRODUCTS.map((p, i) => ({
-  ...p,
-  percentage: [8, 6, 5, 6, 4, 3, 3, 5][i],
-  salePrice: (p.defaultPrice * (1 - [8, 6, 5, 6, 4, 3, 3, 5][i] / 100)).toFixed(
-    2,
-  ),
-}));
+const PER_PAGE = 10;
 
 function DetailRow({ label, value }) {
   return (
@@ -65,7 +60,53 @@ function DetailRow({ label, value }) {
   );
 }
 
+// ─── SubDealer View Dialog ────────────────────────────────────────────────────
+// Fetches real commissions from the API when a subdealer is opened.
+// Network can only view — read-only.
 function SubDealerViewDialog({ subdealer, open, onClose }) {
+  const [commissions, setCommissions] = useState([]);
+  const [loadingComm, setLoadingComm] = useState(false);
+
+  useEffect(() => {
+    if (!open || !subdealer?.id) return;
+
+    const load = async () => {
+      setLoadingComm(true);
+      try {
+        const res = await commissionsApi.getByEntity("SUBDEALER", subdealer.id);
+        const apiRows = res.data.commissions ?? [];
+
+        // Merge with full PRODUCTS list so all 8 rows always appear
+        const merged = PRODUCTS.map((p) => {
+          const found = apiRows.find((c) => c.productId === p.id);
+          return {
+            productId: p.id,
+            description: p.description,
+            defaultPrice: p.defaultPrice,
+            percentage: found?.percentage ?? null,
+            salePrice: found?.salePrice ?? null,
+          };
+        });
+        setCommissions(merged);
+      } catch {
+        // On error show empty rows — no mock data
+        setCommissions(
+          PRODUCTS.map((p) => ({
+            productId: p.id,
+            description: p.description,
+            defaultPrice: p.defaultPrice,
+            percentage: null,
+            salePrice: null,
+          })),
+        );
+      } finally {
+        setLoadingComm(false);
+      }
+    };
+
+    load();
+  }, [open, subdealer?.id]);
+
   if (!subdealer) return null;
 
   const thStyle = {
@@ -129,6 +170,7 @@ function SubDealerViewDialog({ subdealer, open, onClose }) {
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={3}>
+          {/* Left: entity details */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{
@@ -149,10 +191,11 @@ function SubDealerViewDialog({ subdealer, open, onClose }) {
               label="Νόμιμος εκπρόσωπος"
               value={subdealer.nomimosEkprosopos}
             />
-            <DetailRow label="Dealer" value={subdealer.dealerName} />
             <DetailRow label="Επάγγελμα" value={subdealer.epaggelma} />
             <DetailRow label="Δ.Ο.Υ." value={subdealer.doy} />
           </Grid>
+
+          {/* Right: contact */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{
@@ -174,7 +217,7 @@ function SubDealerViewDialog({ subdealer, open, onClose }) {
             <DetailRow label="Email" value={subdealer.email} />
           </Grid>
 
-          {/* Προμήθειες — read only */}
+          {/* Commissions — real data from API */}
           <Grid item xs={12}>
             <Divider sx={{ mb: 1.5 }} />
             <Box
@@ -198,73 +241,94 @@ function SubDealerViewDialog({ subdealer, open, onClose }) {
                 </Typography>
               </Box>
             </Box>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>#</th>
-                  <th style={thStyle}>Περιγραφή</th>
-                  <th style={{ ...thStyle, width: 200 }}>Προμήθεια %</th>
-                  <th style={{ ...thStyle, width: 160, textAlign: "right" }}>
-                    Τιμή Πώλησης
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockCommissions.map((c, i) => (
-                  <tr
-                    key={c.id}
-                    style={{
-                      borderBottom: "0.5px solid #f3f4f6",
-                      background: "#fafafa",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {i + 1}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {c.description}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Chip
-                        label={`${c.percentage}%`}
-                        size="small"
-                        sx={{
-                          fontSize: 11,
-                          height: 20,
-                          background: "#fef3c7",
-                          color: "#d97706",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "right",
-                        fontSize: 13,
-                        fontFamily: "monospace",
-                        fontWeight: 600,
-                        color: "#111827",
-                      }}
-                    >
-                      €{c.salePrice}
-                    </td>
+
+            {loadingComm ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>#</th>
+                    <th style={thStyle}>Περιγραφή</th>
+                    <th style={{ ...thStyle, width: 160 }}>Προμήθεια %</th>
+                    <th style={{ ...thStyle, width: 160, textAlign: "right" }}>
+                      Τιμή Πώλησης
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {commissions.map((c, i) => (
+                    <tr
+                      key={c.productId}
+                      style={{
+                        borderBottom: "0.5px solid #f3f4f6",
+                        background: "#fafafa",
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 12,
+                          color: "#9ca3af",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {i + 1}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {c.description}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        {c.percentage != null ? (
+                          <Chip
+                            label={`${Number(c.percentage).toFixed(1)}%`}
+                            size="small"
+                            sx={{
+                              fontSize: 11,
+                              height: 22,
+                              background: "#fef3c7",
+                              color: "#d97706",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                            }}
+                          />
+                        ) : (
+                          <Typography sx={{ fontSize: 12, color: "#d1d5db" }}>
+                            —
+                          </Typography>
+                        )}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                        {c.salePrice != null ? (
+                          <Typography
+                            sx={{
+                              fontSize: 13,
+                              fontFamily: "monospace",
+                              fontWeight: 600,
+                              color: "#111827",
+                            }}
+                          >
+                            €{Number(c.salePrice).toFixed(2)}
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ fontSize: 13, color: "#d1d5db" }}>
+                            —
+                          </Typography>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Grid>
         </Grid>
       </DialogContent>
@@ -277,10 +341,11 @@ function SubDealerViewDialog({ subdealer, open, onClose }) {
   );
 }
 
-export default function NetworkSubDealersPage() {
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function NetworkSubdealersPage() {
   const { user } = useAuth();
 
-  const [subDealers, setSubDealers] = useState([]);
+  const [subdealers, setSubdealers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
@@ -290,21 +355,20 @@ export default function NetworkSubDealersPage() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const PER_PAGE = 10;
 
-  const fetchSubDealers = useCallback(async () => {
+  const fetchSubdealers = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const params = {
         page,
         size: PER_PAGE,
-        networkId: user?.id, // ΜΟΝΟ sub-dealers αυτού του network
+        networkId: user?.id,
         ...(search && { search }),
         ...(filterCity && { city: filterCity }),
       };
       const res = await subdealersApi.getAll(params);
-      setSubDealers(res.data.content);
+      setSubdealers(res.data.content);
       setTotal(res.data.totalElements);
       setTotalPages(res.data.totalPages);
     } catch {
@@ -315,29 +379,26 @@ export default function NetworkSubDealersPage() {
   }, [page, search, filterCity, user]);
 
   useEffect(() => {
-    fetchSubDealers();
-  }, [fetchSubDealers]);
+    fetchSubdealers();
+  }, [fetchSubdealers]);
 
-  const cities = [...new Set(subDealers.map((s) => s.city).filter(Boolean))];
+  const clearFilters = () => {
+    setSearch("");
+    setFilterCity("");
+    setPage(0);
+  };
+  const hasFilters = search || filterCity;
+  const cities = [...new Set(subdealers.map((s) => s.city).filter(Boolean))];
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 3,
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-            Sub-dealer
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές — μόνο του δικτύου σας
-          </Typography>
-        </Box>
+      <Box sx={{ mb: 3 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+          Sub-dealers
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
+          {total} εγγραφές — μόνο sub-dealers του δικτύου σας · Μόνο ανάγνωση
+        </Typography>
       </Box>
 
       {error && (
@@ -346,11 +407,18 @@ export default function NetworkSubDealersPage() {
         </Alert>
       )}
 
+      {/* Filters */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
       >
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          flexWrap="wrap"
+          alignItems="center"
+          useFlexGap
+        >
           <TextField
             size="small"
             placeholder="Αναζήτηση ΑΦΜ, επωνυμία..."
@@ -359,7 +427,7 @@ export default function NetworkSubDealersPage() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            sx={{ width: 280 }}
+            sx={{ width: 240 }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -368,7 +436,7 @@ export default function NetworkSubDealersPage() {
               ),
             }}
           />
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>Πόλη</InputLabel>
             <Select
               value={filterCity}
@@ -386,14 +454,10 @@ export default function NetworkSubDealersPage() {
               ))}
             </Select>
           </FormControl>
-          {(search || filterCity) && (
+          {hasFilters && (
             <Button
               size="small"
-              onClick={() => {
-                setSearch("");
-                setFilterCity("");
-                setPage(0);
-              }}
+              onClick={clearFilters}
               sx={{ color: "#9ca3af", fontSize: 12 }}
             >
               Καθαρισμός ✕
@@ -402,6 +466,7 @@ export default function NetworkSubDealersPage() {
         </Stack>
       </Paper>
 
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -419,7 +484,7 @@ export default function NetworkSubDealersPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#fafafa" }}>
-                  {["ΑΦΜ", "Επωνυμία", "Πόλη", ""].map((h) => (
+                  {["ΑΦΜ", "Επωνυμία", "Πόλη", "Dealer", ""].map((h) => (
                     <th
                       key={h}
                       style={{
@@ -440,10 +505,10 @@ export default function NetworkSubDealersPage() {
                 </tr>
               </thead>
               <tbody>
-                {subDealers.length === 0 ? (
+                {subdealers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       style={{
                         padding: 40,
                         textAlign: "center",
@@ -451,64 +516,40 @@ export default function NetworkSubDealersPage() {
                         fontSize: 14,
                       }}
                     >
-                      Δεν βρέθηκαν εγγραφές
+                      Δεν βρέθηκαν sub-dealers
                     </td>
                   </tr>
                 ) : (
-                  subDealers.map((s) => (
+                  subdealers.map((s, i) => (
                     <tr
                       key={s.id}
                       style={{
-                        borderBottom: "0.5px solid #f3f4f6",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                      onClick={() => {
-                        setSelected(s);
-                        setDialogOpen(true);
+                        borderBottom:
+                          i < subdealers.length - 1
+                            ? "0.5px solid #f3f4f6"
+                            : "none",
                       }}
                     >
                       <td
                         style={{
                           padding: "11px 16px",
+                          fontSize: 13,
                           fontFamily: "monospace",
-                          fontSize: 12,
-                          color: "#6b7280",
+                          color: "#374151",
                         }}
                       >
                         {s.afm}
                       </td>
                       <td style={{ padding: "11px 16px" }}>
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
                         >
-                          <Avatar
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              background: "#fef3c7",
-                              color: "#d97706",
-                              fontSize: 12,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {s.eponymia?.charAt(0)}
-                          </Avatar>
-                          <Typography
-                            sx={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: "#111827",
-                            }}
-                          >
-                            {s.eponymia}
-                          </Typography>
-                        </Box>
+                          {s.eponymia}
+                        </Typography>
                       </td>
                       <td
                         style={{
@@ -519,18 +560,27 @@ export default function NetworkSubDealersPage() {
                       >
                         {s.city}
                       </td>
+                      <td
+                        style={{
+                          padding: "11px 16px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {s.dealerName || "—"}
+                      </td>
                       <td style={{ padding: "11px 16px" }}>
                         <Tooltip title="Προβολή">
                           <IconButton
                             size="small"
+                            sx={{
+                              color: "#9ca3af",
+                              "&:hover": { color: "#1f6feb" },
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelected(s);
                               setDialogOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
                             }}
                           >
                             <VisibilityIcon sx={{ fontSize: 16 }} />
@@ -544,6 +594,8 @@ export default function NetworkSubDealersPage() {
             </table>
           </Box>
         )}
+
+        {/* Pagination */}
         <Box
           sx={{
             px: 2,

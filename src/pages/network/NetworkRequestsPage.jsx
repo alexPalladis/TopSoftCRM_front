@@ -718,7 +718,7 @@ export default function NetworkRequestsPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          Ω
+          ΝΕΟ ΑΙΤΗΜΑ
         </Button>
       </Box>
 

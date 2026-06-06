@@ -6,7 +6,9 @@ export const customersApi = {
   create: (data) => api.post("/customers", data),
   update: (id, data) => api.put(`/customers/${id}`, data),
   delete: (id) => api.delete(`/customers/${id}`),
-  // Reassign customer to a different subdealer.
-  // data = { subDealerId: string | null }
   reassign: (id, data) => api.patch(`/customers/${id}/reassign`, data),
+  // Subscriptions — used in CustomerFormPage edit mode
+  getSubscriptions: (id) => api.get(`/customers/${id}/subscriptions`),
+  upsertSubscription: (id, data) =>
+    api.post(`/customers/${id}/subscriptions`, data),
 };

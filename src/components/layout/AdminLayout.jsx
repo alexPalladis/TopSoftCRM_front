@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
   Box,
@@ -28,9 +28,10 @@ import PercentIcon from "@mui/icons-material/Percent";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsIcon from "@mui/icons-material/Notifications";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { useAuth } from "../../context/AuthContext";
 import { getNavItems } from "../../utils/roleUtils";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import { ticketsApi } from "../../services/tickets";
 
 const SIDEBAR_WIDTH = 230;
 
@@ -58,17 +59,38 @@ export default function AdminLayout() {
   const location = useLocation();
   const navItems = getNavItems(user?.role);
 
+  // ── Live pending requests count ───────────────────────────────────────────
+  // Fetched once on mount and again every 60 seconds.
+  // Shown in the sidebar chip and the topbar bell badge.
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchPending = async () => {
+      try {
+        const res = await ticketsApi.pendingCount();
+        setPendingCount(res.data ?? 0);
+      } catch {
+        // Silently ignore — badge stays at its last value
+      }
+    };
+
+    fetchPending(); // immediate call on mount
+
+    const interval = setInterval(fetchPending, 60_000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const initials = user?.username?.slice(0, 2).toUpperCase() || "Unknown";
+  const initials = user?.username?.slice(0, 2).toUpperCase() || "??";
   const roleColor = roleColors[user?.role] || "#6b7280";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", background: "#f8f9fb" }}>
-      {/* Sidebar */}
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <Drawer
         variant="permanent"
         sx={{
@@ -154,6 +176,7 @@ export default function AdminLayout() {
         <List dense sx={{ flex: 1, px: 1 }}>
           {navItems.map((item) => {
             const active = location.pathname.startsWith(item.path);
+            const isRequests = item.path === "/requests";
             return (
               <ListItem key={item.path} disablePadding sx={{ mb: 0.3 }}>
                 <ListItemButton
@@ -161,7 +184,7 @@ export default function AdminLayout() {
                   sx={{
                     borderRadius: 1.5,
                     borderLeft: active
-                      ? `2px solid #1d4ed8`
+                      ? "2px solid #1d4ed8"
                       : "2px solid transparent",
                     background: active ? "#eff6ff" : "transparent",
                     color: active ? "#1d4ed8" : "#6b7280",
@@ -179,15 +202,17 @@ export default function AdminLayout() {
                       fontWeight: active ? 600 : 400,
                     }}
                   />
-                  {item.path === "/requests" && (
+                  {/* Live pending count chip — only on Αιτήματα row */}
+                  {isRequests && pendingCount > 0 && (
                     <Chip
-                      label="3"
+                      label={pendingCount}
                       size="small"
                       sx={{
                         height: 18,
                         fontSize: 10,
                         background: "#fee2e2",
                         color: "#dc2626",
+                        fontWeight: 600,
                       }}
                     />
                   )}
@@ -226,6 +251,9 @@ export default function AdminLayout() {
                 fontWeight: 500,
                 color: "#111827",
                 lineHeight: 1.3,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
               }}
             >
               {user?.username}
@@ -255,7 +283,7 @@ export default function AdminLayout() {
         </Box>
       </Drawer>
 
-      {/* Main */}
+      {/* ── Main area ────────────────────────────────────────────────────── */}
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Topbar */}
         <AppBar
@@ -276,9 +304,17 @@ export default function AdminLayout() {
                 ?.label || "Dashboard"}
             </Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Tooltip title="Ειδοποιήσεις">
-                <IconButton size="small" sx={{ color: "#6b7280" }}>
-                  <Badge badgeContent={3} color="error">
+              {/* Live bell badge — navigates to /requests on click */}
+              <Tooltip title="Εκκρεμή αιτήματα">
+                <IconButton
+                  size="small"
+                  sx={{ color: "#6b7280" }}
+                  onClick={() => navigate("/requests")}
+                >
+                  <Badge
+                    badgeContent={pendingCount > 0 ? pendingCount : null}
+                    color="error"
+                  >
                     <NotificationsIcon fontSize="small" />
                   </Badge>
                 </IconButton>

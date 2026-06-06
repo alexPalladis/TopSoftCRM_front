@@ -13,7 +13,7 @@ import LoginPage from "./pages/login/LoginPage";
 import AdminLayout from "./components/layout/AdminLayout";
 
 // ─── ADMIN pages (lazy) ────────────────────────────────────────────────────
-const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
+const DashboardPage = lazy(() => import("./components/shared/DashboardPage"));
 const CustomersPage = lazy(() => import("./pages/admin/CustomersPage"));
 const CustomerFormPage = lazy(() => import("./pages/admin/CustomerFormPage"));
 const DealersPage = lazy(() => import("./pages/admin/DealersPage"));

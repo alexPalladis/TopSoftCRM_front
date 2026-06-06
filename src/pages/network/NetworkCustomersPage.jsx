@@ -26,7 +26,6 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { useAuth } from "../../context/AuthContext";
@@ -41,6 +40,8 @@ const PRODUCTS = [
   { id: 7, description: "Ενεργά email", type: "QUANTITY" },
   { id: 8, description: "Ψηφιακό Πελατολόγιο", type: "DATE" },
 ];
+
+const PER_PAGE = 10;
 
 function DetailRow({ label, value }) {
   return (
@@ -57,19 +58,67 @@ function DetailRow({ label, value }) {
   );
 }
 
+// ─── Customer Detail Dialog ───────────────────────────────────────────────────
+// Fetches real subscription data from the API each time a customer is opened.
 function CustomerViewDialog({ customer, open, onClose }) {
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loadingSubs, setLoadingSubs] = useState(false);
+
+  useEffect(() => {
+    if (!open || !customer?.id) return;
+
+    const fetchSubs = async () => {
+      setLoadingSubs(true);
+      try {
+        const res = await customersApi.getById(customer.id);
+        const apiSubs = res.data.subscriptions ?? [];
+
+        const merged = PRODUCTS.map((p) => {
+          const found = apiSubs.find((s) => s.productId === p.id);
+          return {
+            productId: p.id,
+            description: p.description,
+            type: p.type,
+            active: found?.active ?? false,
+            expiryDate: found?.expiryDate ?? "",
+            quantity: found?.quantity ?? null,
+            cost: found?.cost ?? 0,
+          };
+        });
+        setSubscriptions(merged);
+      } catch {
+        setSubscriptions(
+          PRODUCTS.map((p) => ({
+            productId: p.id,
+            description: p.description,
+            type: p.type,
+            active: false,
+            expiryDate: "",
+            quantity: null,
+            cost: 0,
+          })),
+        );
+      } finally {
+        setLoadingSubs(false);
+      }
+    };
+
+    fetchSubs();
+  }, [open, customer?.id]);
+
   if (!customer) return null;
 
-  // Mock subscriptions — θα έρθουν από API
-  const subscriptions = PRODUCTS.map((p, i) => ({
-    productId: p.id,
-    description: p.description,
-    type: p.type,
-    active: [0, 1, 3, 5].includes(i),
-    expiryDate: [0, 1, 3].includes(i) ? "2026-12-31" : "",
-    quantity: i === 5 ? 300 : i === 6 ? 500 : null,
-    cost: [120, 100, 50, 100, 200, 30, 20, 50][i],
-  }));
+  const thStyle = {
+    padding: "8px 12px",
+    textAlign: "left",
+    fontSize: 11,
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    fontWeight: 500,
+    borderBottom: "0.5px solid #e5e7eb",
+    background: "#fafafa",
+  };
 
   return (
     <Dialog
@@ -104,7 +153,6 @@ function CustomerViewDialog({ customer, open, onClose }) {
             sx={{
               background: customer.active ? "#dcfce7" : "#fee2e2",
               color: customer.active ? "#166534" : "#991b1b",
-              fontSize: 11,
             }}
           />
           <IconButton size="small" onClick={onClose}>
@@ -115,7 +163,6 @@ function CustomerViewDialog({ customer, open, onClose }) {
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={3}>
-          {/* Στοιχεία */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{
@@ -138,10 +185,14 @@ function CustomerViewDialog({ customer, open, onClose }) {
             />
             <DetailRow label="Επάγγελμα" value={customer.epaggelma} />
             <DetailRow label="Δ.Ο.Υ." value={customer.doy} />
-            <DetailRow
-              label="Ενεργός"
-              value={customer.active ? "Ναι" : "Όχι"}
-            />
+            <DetailRow label="Διεύθυνση" value={customer.address} />
+            <DetailRow label="Πόλη" value={customer.city} />
+            <DetailRow label="Τ.Κ." value={customer.tk} />
+            <DetailRow label="Τηλέφωνο σταθερό" value={customer.phoneFixed} />
+            <DetailRow label="Τηλέφωνο κινητό" value={customer.phoneMobile} />
+            <DetailRow label="Email" value={customer.email} />
+            <DetailRow label="Dealer" value={customer.dealerName} />
+            <DetailRow label="Sub-dealer" value={customer.subDealerName} />
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography
@@ -154,159 +205,88 @@ function CustomerViewDialog({ customer, open, onClose }) {
                 mb: 1,
               }}
             >
-              Επικοινωνία
+              Ενεργοποιημένα Προϊόντα
             </Typography>
-            <DetailRow label="Διεύθυνση" value={customer.address} />
-            <DetailRow label="Πόλη" value={customer.city} />
-            <DetailRow label="Τ.Κ." value={customer.tk} />
-            <DetailRow label="Σταθερό" value={customer.phoneFixed} />
-            <DetailRow label="Κινητό" value={customer.phoneMobile} />
-            <DetailRow label="Email" value={customer.email} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 1.5 }} />
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#6b7280",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                mb: 1,
-              }}
-            >
-              Δίκτυο πωλήσεων
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <DetailRow label="Dealer" value={customer.dealerName} />
-              </Grid>
-              <Grid item xs={6}>
-                <DetailRow label="Sub-dealer" value={customer.subDealerName} />
-              </Grid>
-            </Grid>
-          </Grid>
-
-          {/* Ενεργοποιημένα προϊόντα */}
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 1.5 }} />
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}
-            >
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Ενεργοποιημένα προϊόντα
-              </Typography>
-              <Tooltip title="Ενημερώνεται από την τιμολογιέρα">
-                <InfoOutlinedIcon sx={{ fontSize: 14, color: "#9ca3af" }} />
-              </Tooltip>
-            </Box>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  {[
-                    "#",
-                    "Περιγραφή",
-                    "Ενεργοποιημένο",
-                    "Ημερ. Λήξης / Ποσότητα",
-                    "Κόστος",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {subscriptions.map((s, i) => (
-                  <tr
-                    key={s.productId}
-                    style={{
-                      borderBottom: "0.5px solid #f3f4f6",
-                      background: s.active ? "#f0fdf4" : "transparent",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {i + 1}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#111827",
-                        fontWeight: s.active ? 500 : 400,
-                      }}
-                    >
-                      {s.description}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Chip
-                        label={s.active ? "Ναι" : "Όχι"}
-                        size="small"
-                        sx={{
-                          fontSize: 11,
-                          height: 20,
-                          background: s.active ? "#dcfce7" : "#f3f4f6",
-                          color: s.active ? "#166534" : "#6b7280",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {s.type === "DATE"
-                        ? s.expiryDate
-                          ? new Date(s.expiryDate).toLocaleDateString("el-GR")
-                          : "—"
-                        : s.quantity
-                          ? `${s.quantity}`
-                          : "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        fontFamily: "monospace",
-                        fontWeight: 600,
-                        color: "#111827",
-                      }}
-                    >
-                      €{s.cost}
-                    </td>
+            {loadingSubs ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Περιγραφή", "Ενεργό", "Λήξη / Ποσότητα", "Κόστος"].map(
+                      (h) => (
+                        <th key={h} style={thStyle}>
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {subscriptions.map((s, i) => (
+                    <tr
+                      key={s.productId}
+                      style={{
+                        borderBottom:
+                          i < subscriptions.length - 1
+                            ? "0.5px solid #f3f4f6"
+                            : "none",
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {s.description}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        <Chip
+                          label={s.active ? "Ναι" : "Όχι"}
+                          size="small"
+                          sx={{
+                            fontSize: 10,
+                            height: 20,
+                            background: s.active ? "#dcfce7" : "#f3f4f6",
+                            color: s.active ? "#166534" : "#6b7280",
+                          }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {s.type === "DATE"
+                          ? s.expiryDate
+                            ? new Date(s.expiryDate).toLocaleDateString("el-GR")
+                            : "—"
+                          : s.quantity != null
+                            ? `${s.quantity}`
+                            : "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        {s.cost ? `€${s.cost}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Grid>
         </Grid>
       </DialogContent>
@@ -319,8 +299,10 @@ function CustomerViewDialog({ customer, open, onClose }) {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function NetworkCustomersPage() {
   const { user } = useAuth();
+
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -334,9 +316,8 @@ export default function NetworkCustomersPage() {
   const [selected, setSelected] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dealers, setDealers] = useState([]);
-  const PER_PAGE = 10;
 
-  // Φόρτωσε dealers του network
+  // Load dealers of this network for the filter dropdown
   useEffect(() => {
     dealersApi
       .getAll({ size: 100 })
@@ -351,7 +332,7 @@ export default function NetworkCustomersPage() {
       const params = {
         page,
         size: PER_PAGE,
-        networkId: user?.id, // Μόνο πελάτες αυτού του network
+        networkId: user?.id,
         ...(search && { search }),
         ...(filterCity && { city: filterCity }),
         ...(filterDealer && { dealerId: filterDealer }),
@@ -398,7 +379,7 @@ export default function NetworkCustomersPage() {
             Πελάτες
           </Typography>
           <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές — μόνο του δικτύου σας
+            {total} εγγραφές — μόνο πελάτες του δικτύου σας
           </Typography>
         </Box>
       </Box>
@@ -409,6 +390,7 @@ export default function NetworkCustomersPage() {
         </Alert>
       )}
 
+      {/* Filters */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -500,6 +482,7 @@ export default function NetworkCustomersPage() {
         </Stack>
       </Paper>
 
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -551,47 +534,40 @@ export default function NetworkCustomersPage() {
                         fontSize: 14,
                       }}
                     >
-                      Δεν βρέθηκαν εγγραφές
+                      Δεν βρέθηκαν πελάτες
                     </td>
                   </tr>
                 ) : (
-                  customers.map((c) => (
+                  customers.map((c, i) => (
                     <tr
                       key={c.id}
                       style={{
-                        borderBottom: "0.5px solid #f3f4f6",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                      onClick={() => {
-                        setSelected(c);
-                        setDialogOpen(true);
+                        borderBottom:
+                          i < customers.length - 1
+                            ? "0.5px solid #f3f4f6"
+                            : "none",
                       }}
                     >
                       <td
                         style={{
                           padding: "11px 16px",
+                          fontSize: 13,
                           fontFamily: "monospace",
-                          fontSize: 12,
-                          color: "#6b7280",
+                          color: "#374151",
                         }}
                       >
                         {c.afm}
                       </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "#111827",
-                        }}
-                      >
-                        {c.eponymia}
+                      <td style={{ padding: "11px 16px" }}>
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
+                        >
+                          {c.eponymia}
+                        </Typography>
                       </td>
                       <td
                         style={{
@@ -605,8 +581,8 @@ export default function NetworkCustomersPage() {
                       <td
                         style={{
                           padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#6b7280",
+                          fontSize: 13,
+                          color: "#374151",
                         }}
                       >
                         {c.dealerName || "—"}

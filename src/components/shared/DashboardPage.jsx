@@ -13,10 +13,12 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PeopleIcon from "@mui/icons-material/People";
 import HubIcon from "@mui/icons-material/Hub";
 import StoreIcon from "@mui/icons-material/Store";
+import PersonIcon from "@mui/icons-material/Person";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
+import { subdealersApi } from "../../services/subdealers";
 import { ticketsApi } from "../../services/tickets";
 import { useAuth } from "../../context/AuthContext";
 
@@ -26,18 +28,6 @@ export default function DashboardPage() {
 
   const role = user?.role;
 
-  /*
-   * useQueries fires all four requests in parallel — same as your
-   * Promise.all() approach, but results are cached per queryKey.
-   *
-   * On revisit within 60s (staleTime set in main.jsx):
-   *   → stats render instantly from cache, no loading spinner.
-   * After 60s:
-   *   → cached data shows immediately, then silently revalidates in background.
-   *
-   * enabled: false skips the query entirely for roles that don't need it,
-   * instead of resolving a dummy Promise.resolve(null).
-   */
   const results = useQueries({
     queries: [
       {
@@ -58,14 +48,18 @@ export default function DashboardPage() {
         queryKey: ["dashboard", "pendingTickets"],
         queryFn: () => ticketsApi.pendingCount(),
       },
+      {
+        // Sub-dealers — visible to ADMIN, NETWORK, DEALER only
+        queryKey: ["dashboard", "subdealers"],
+        queryFn: () => subdealersApi.getAll({ page: 0, size: 1 }),
+        enabled: ["ADMIN", "NETWORK", "DEALER"].includes(role),
+      },
     ],
   });
 
-  const [custQ, dealerQ, networkQ, ticketQ] = results;
+  const [custQ, dealerQ, networkQ, ticketQ, subDealerQ] = results;
 
-  // Show full-page loader only on the very first load (no cached data yet)
   const isFirstLoad = results.some((q) => q.isLoading);
-  // Show a soft error only if the primary customers query fails
   const hasError = custQ.isError;
 
   const stats = {
@@ -73,11 +67,17 @@ export default function DashboardPage() {
     totalDealers: dealerQ.data?.data?.totalElements ?? 0,
     totalNetworks: networkQ.data?.data?.totalElements ?? 0,
     pendingTickets: ticketQ.data?.data ?? 0,
+    totalSubDealers: subDealerQ.data?.data?.totalElements ?? 0,
   };
 
   const customers = custQ.data?.data?.content ?? [];
 
-  const statCards = [
+  // Build stat cards — filtered by role so each role only sees relevant cards.
+  // ADMIN:    Πελάτες · Dealers · Sub-dealers · Networks · Αιτήματα (5 cards)
+  // NETWORK:  Πελάτες · Dealers · Sub-dealers · Αιτήματα             (4 cards)
+  // DEALER:   Πελάτες · Sub-dealers · Αιτήματα                       (3 cards)
+  // SUBDEALER: Πελάτες · Αιτήματα                                    (2 cards)
+  const allCards = [
     {
       label: "ΣΥΝΟΛΟ ΠΕΛΑΤΩΝ",
       value: stats.totalCustomers.toLocaleString("el-GR"),
@@ -86,6 +86,7 @@ export default function DashboardPage() {
       delta: "",
       up: true,
       path: "/customers",
+      roles: ["ADMIN", "NETWORK", "DEALER", "SUBDEALER"],
     },
     {
       label: "ΕΝΕΡΓΟΙ DEALERS",
@@ -95,15 +96,27 @@ export default function DashboardPage() {
       delta: "",
       up: true,
       path: "/dealers",
+      roles: ["ADMIN", "NETWORK", "DEALER"],
     },
     {
-      label: "Networks",
+      label: "SUB-DEALERS",
+      value: stats.totalSubDealers.toLocaleString("el-GR"),
+      icon: <PersonIcon />,
+      color: "#f59e0b",
+      delta: "Σύνολο",
+      up: false,
+      path: "/subdealers",
+      roles: ["ADMIN", "NETWORK", "DEALER"],
+    },
+    {
+      label: "NETWORKS",
       value: stats.totalNetworks.toLocaleString("el-GR"),
       icon: <HubIcon />,
       color: "#8b5cf6",
       delta: "Σύνολο",
       up: false,
       path: "/networks",
+      roles: ["ADMIN", "NETWORK"],
     },
     {
       label: "ΕΚΚΡΕΜΗ ΑΙΤΗΜΑΤΑ",
@@ -114,8 +127,12 @@ export default function DashboardPage() {
       up: false,
       alert: stats.pendingTickets > 0,
       path: "/requests",
+      roles: ["ADMIN", "NETWORK", "DEALER", "SUBDEALER"],
     },
   ];
+
+  // Only show cards relevant to the current role
+  const statCards = allCards.filter((c) => c.roles.includes(role));
 
   if (isFirstLoad) {
     return (
@@ -140,7 +157,7 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* Stat Cards */}
+      {/* ── Stat Cards ── */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {statCards.map((s) => (
           <Grid item xs={12} sm={6} md={3} key={s.label}>
@@ -211,7 +228,7 @@ export default function DashboardPage() {
         ))}
       </Grid>
 
-      {/* Recent Customers */}
+      {/* ── Recent Customers ── */}
       <Paper
         elevation={0}
         sx={{
@@ -295,19 +312,19 @@ export default function DashboardPage() {
                           : "none",
                       cursor: "pointer",
                     }}
+                    onClick={() => navigate("/customers")}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.background = "#f9fafb")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.background = "transparent")
                     }
-                    onClick={() => navigate("/customers")}
                   >
                     <td
                       style={{
-                        padding: "11px 16px",
+                        padding: "12px 16px",
+                        fontSize: 13,
                         fontFamily: "monospace",
-                        fontSize: 12,
                         color: "#6b7280",
                       }}
                     >
@@ -315,7 +332,7 @@ export default function DashboardPage() {
                     </td>
                     <td
                       style={{
-                        padding: "11px 16px",
+                        padding: "12px 16px",
                         fontSize: 13,
                         fontWeight: 500,
                         color: "#111827",
@@ -325,7 +342,7 @@ export default function DashboardPage() {
                     </td>
                     <td
                       style={{
-                        padding: "11px 16px",
+                        padding: "12px 16px",
                         fontSize: 13,
                         color: "#374151",
                       }}
@@ -334,14 +351,14 @@ export default function DashboardPage() {
                     </td>
                     <td
                       style={{
-                        padding: "11px 16px",
-                        fontSize: 12,
-                        color: "#6b7280",
+                        padding: "12px 16px",
+                        fontSize: 13,
+                        color: "#374151",
                       }}
                     >
                       {c.dealerName || "—"}
                     </td>
-                    <td style={{ padding: "11px 16px" }}>
+                    <td style={{ padding: "12px 16px" }}>
                       <Chip
                         label={c.active ? "Ναι" : "Όχι"}
                         size="small"

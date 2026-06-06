@@ -6,11 +6,14 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  Divider,
 } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import { commissionsApi } from "../../services/commissions";
 import { useAuth } from "../../context/AuthContext";
+
+// Global sentinel IDs — same ones the Admin PricelistPage writes to
+const NETWORK_DEFAULT_ID = "00000010";
+const DEALER_DEFAULT_ID = "00000020";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", defaultPrice: 120 },
@@ -23,6 +26,22 @@ const PRODUCTS = [
   { id: 8, description: "Ψηφιακό Πελατολόγιο", defaultPrice: 50 },
 ];
 
+// Merge API rows with full PRODUCTS list — every row always appears.
+// If the API has no data for a product, percentage and salePrice are null (shows "—").
+function mergeWithProducts(apiRows) {
+  return PRODUCTS.map((p) => {
+    const found = (apiRows ?? []).find((c) => c.productId === p.id);
+    return {
+      productId: p.id,
+      productDescription: p.description,
+      defaultPrice: p.defaultPrice,
+      percentage: found?.percentage ?? null,
+      salePrice: found?.salePrice ?? null,
+    };
+  });
+}
+
+// ─── Read-only table ──────────────────────────────────────────────────────────
 function ReadOnlyTable({ title, color, data, loading }) {
   const thStyle = {
     padding: "10px 16px",
@@ -47,7 +66,7 @@ function ReadOnlyTable({ title, color, data, loading }) {
         mb: 3,
       }}
     >
-      {/* Header */}
+      {/* Header bar */}
       <Box
         sx={{
           px: 2.5,
@@ -70,8 +89,9 @@ function ReadOnlyTable({ title, color, data, loading }) {
         </Box>
       </Box>
 
+      {/* Body */}
       {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
           <CircularProgress size={28} />
         </Box>
       ) : (
@@ -79,11 +99,8 @@ function ReadOnlyTable({ title, color, data, loading }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={thStyle}>#</th>
                 <th style={thStyle}>Περιγραφή</th>
-                <th style={{ ...thStyle, width: 220 }}>
-                  Προμήθεια επί τελικής τιμής %
-                </th>
+                <th style={{ ...thStyle, width: 180 }}>Προμήθεια %</th>
                 <th style={{ ...thStyle, width: 180, textAlign: "right" }}>
                   Τιμή Πώλησης
                 </th>
@@ -92,45 +109,34 @@ function ReadOnlyTable({ title, color, data, loading }) {
             <tbody>
               {data.map((row, i) => (
                 <tr
-                  key={row.productId || i}
-                  style={{ borderBottom: "0.5px solid #f3f4f6" }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#f9fafb")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "transparent")
-                  }
+                  key={row.productId}
+                  style={{
+                    borderBottom:
+                      i < data.length - 1 ? "0.5px solid #f3f4f6" : "none",
+                  }}
                 >
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      fontSize: 12,
-                      color: "#9ca3af",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {i + 1}
-                  </td>
+                  {/* Description */}
                   <td
                     style={{
                       padding: "12px 16px",
                       fontSize: 13,
-                      color: "#111827",
-                      fontWeight: 500,
+                      color: "#374151",
                     }}
                   >
                     {row.productDescription}
                   </td>
+
+                  {/* Percentage */}
                   <td style={{ padding: "12px 16px" }}>
-                    {Number(row.percentage) > 0 ? (
+                    {row.percentage != null ? (
                       <Chip
-                        label={`${Number(row.percentage).toFixed(0)}%`}
+                        label={`${Number(row.percentage).toFixed(1)}%`}
                         size="small"
                         sx={{
                           fontSize: 12,
                           height: 24,
                           background: color + "20",
-                          color,
+                          color: color,
                           fontFamily: "monospace",
                           fontWeight: 700,
                         }}
@@ -141,8 +147,10 @@ function ReadOnlyTable({ title, color, data, loading }) {
                       </Typography>
                     )}
                   </td>
+
+                  {/* Sale price */}
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                    {row.salePrice ? (
+                    {row.salePrice != null ? (
                       <Box>
                         <Typography
                           sx={{
@@ -155,7 +163,7 @@ function ReadOnlyTable({ title, color, data, loading }) {
                           €{Number(row.salePrice).toFixed(2)}
                         </Typography>
                         <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
-                          από €{PRODUCTS[i]?.defaultPrice || "—"} τιμοκαταλόγου
+                          από €{row.defaultPrice} τιμοκαταλόγου
                         </Typography>
                       </Box>
                     ) : (
@@ -187,6 +195,7 @@ function ReadOnlyTable({ title, color, data, loading }) {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function NetworkPricelistPage() {
   const { user } = useAuth();
 
@@ -196,78 +205,34 @@ export default function NetworkPricelistPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!user?.id) return;
+
     const fetchAll = async () => {
       setLoading(true);
       setError("");
       try {
-        // Φόρτωσε προμήθειες του network (για τον εαυτό του)
-        const netRes = await commissionsApi.getByEntity("NETWORK", user?.id);
+        // Run both requests in parallel
+        const [netRes, dealerRes] = await Promise.all([
+          // Network table: this network's OWN commission rows
+          commissionsApi.getByEntity("NETWORK", user.id),
+          // Dealer table: the GLOBAL dealer defaults set by Admin in Τιμοκατάλογος
+          commissionsApi.getByEntity("DEALER", DEALER_DEFAULT_ID),
+        ]);
 
-        // Κατασκεύασε τα δεδομένα για τον πίνακα Network
-        const networkRows = (netRes.data.commissions || []).map((c) => ({
-          productId: c.productId,
-          productDescription: c.productDescription,
-          percentage: c.percentage,
-          salePrice: c.salePrice,
-        }));
-
-        // Αν δεν επέστρεψε δεδομένα, γέμισε με mock
-        setNetworkData(
-          networkRows.length > 0
-            ? networkRows
-            : PRODUCTS.map((p, i) => ({
-                productId: p.id,
-                productDescription: p.description,
-                percentage: [5, 4, 4, 3, 3, 2, 2, 3][i],
-                salePrice: (
-                  p.defaultPrice *
-                  (1 - [5, 4, 4, 3, 3, 2, 2, 3][i] / 100)
-                ).toFixed(2),
-              })),
-        );
-
-        // Για τον πίνακα Dealer — γενικές τιμές (default από τιμοκατάλογο)
-        setDealerData(
-          PRODUCTS.map((p, i) => ({
-            productId: p.id,
-            productDescription: p.description,
-            percentage: [15, 10, 12, 10, 8, 5, 5, 10][i],
-            salePrice: (
-              p.defaultPrice *
-              (1 - [15, 10, 12, 10, 8, 5, 5, 10][i] / 100)
-            ).toFixed(2),
-          })),
-        );
+        setNetworkData(mergeWithProducts(netRes.data.commissions));
+        setDealerData(mergeWithProducts(dealerRes.data.commissions));
       } catch {
-        // Fallback σε mock αν το API δεν έχει δεδομένα ακόμα
-        setNetworkData(
-          PRODUCTS.map((p, i) => ({
-            productId: p.id,
-            productDescription: p.description,
-            percentage: [5, 4, 4, 3, 3, 2, 2, 3][i],
-            salePrice: (
-              p.defaultPrice *
-              (1 - [5, 4, 4, 3, 3, 2, 2, 3][i] / 100)
-            ).toFixed(2),
-          })),
-        );
-        setDealerData(
-          PRODUCTS.map((p, i) => ({
-            productId: p.id,
-            productDescription: p.description,
-            percentage: [15, 10, 12, 10, 8, 5, 5, 10][i],
-            salePrice: (
-              p.defaultPrice *
-              (1 - [15, 10, 12, 10, 8, 5, 5, 10][i] / 100)
-            ).toFixed(2),
-          })),
-        );
+        setError("Σφάλμα φόρτωσης τιμοκαταλόγου");
+        // On error show empty rows — no mock data
+        const empty = mergeWithProducts([]);
+        setNetworkData(empty);
+        setDealerData(empty);
       } finally {
         setLoading(false);
       }
     };
 
-    if (user?.id) fetchAll();
+    fetchAll();
   }, [user]);
 
   return (
@@ -277,7 +242,7 @@ export default function NetworkPricelistPage() {
           Τιμοκατάλογος
         </Typography>
         <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-          Προβολή προμηθειών του δικτύου σας — ορίζονται από τον Admin
+          Προβολή προμηθειών — ορίζονται από τον Admin · Μόνο ανάγνωση
         </Typography>
       </Box>
 

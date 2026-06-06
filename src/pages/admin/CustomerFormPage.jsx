@@ -179,14 +179,15 @@ export default function CustomerFormPage() {
       .catch(() => setSubDealers([]));
   }, [form.dealerId]);
 
-  // Load existing customer for edit
+  // ── Load existing customer for edit — fields AND subscriptions ───────────────
+  // Runs both requests in parallel so we don't double the load time.
   useEffect(() => {
     if (!isEdit) return;
     setPageLoading(true);
-    customersApi
-      .getById(id)
-      .then((res) => {
-        const c = res.data;
+
+    Promise.all([customersApi.getById(id), customersApi.getSubscriptions(id)])
+      .then(([customerRes, subsRes]) => {
+        const c = customerRes.data;
         setForm({
           afm: c.afm || "",
           eponymia: c.eponymia || "",
@@ -204,6 +205,24 @@ export default function CustomerFormPage() {
           dealerId: c.dealerId || "",
           subDealerId: c.subDealerId || "",
         });
+
+        // Merge real subscription data with full PRODUCTS list.
+        // Every product row is always shown — inactive ones have active:false.
+        const apiSubs = subsRes.data ?? [];
+        setSubs(
+          PRODUCTS.map((p) => {
+            const found = apiSubs.find((s) => s.productId === p.id);
+            return {
+              productId: p.id,
+              description: p.description,
+              type: p.type,
+              active: found?.active ?? false,
+              expiryDate: found?.expiryDate ?? "",
+              quantity: found?.quantity ?? "",
+              cost: found?.cost ?? p.defaultCost,
+            };
+          }),
+        );
       })
       .catch(() => setGlobalError("Σφάλμα φόρτωσης πελάτη"))
       .finally(() => setPageLoading(false));
@@ -225,7 +244,6 @@ export default function CustomerFormPage() {
     try {
       // TODO: Σύνδεση με GSIS myAADE API
       await new Promise((r) => setTimeout(r, 1000));
-      // Mock response:
       setForm((p) => ({
         ...p,
         eponymia: "ΔΟΚΙΜΑΣΤΙΚΗ ΕΠΙΧΕΙΡΗΣΗ ΑΕ",
@@ -298,7 +316,7 @@ export default function CustomerFormPage() {
 
   return (
     <Box sx={{ maxWidth: 900 }}>
-      {/* Header */}
+      {/* ── Header ── */}
       <Box
         sx={{
           display: "flex",
@@ -371,37 +389,15 @@ export default function CustomerFormPage() {
         </Alert>
       )}
 
-      <Stack spacing={2}>
-        {/* ===== ΣΤΟΙΧΕΙΑ ΕΠΙΧΕΙΡΗΣΗΣ ===== */}
+      <Stack spacing={2.5}>
+        {/* ── Στοιχεία επιχείρησης ── */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
         >
           <SectionTitle>Στοιχεία επιχείρησης</SectionTitle>
           <Grid container spacing={2}>
-            {/* ID — μόνο σε edit mode */}
-            {isEdit && (
-              <Grid item xs={12} md={4}>
-                <Field label="ID">
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={id}
-                    disabled
-                    sx={{
-                      ...inputSx,
-                      "& .MuiInputBase-input": {
-                        fontFamily: "monospace",
-                        py: "8px",
-                        px: "12px",
-                      },
-                    }}
-                  />
-                </Field>
-              </Grid>
-            )}
-
-            {/* ΑΦΜ + TAXIS button */}
+            {/* AFM + TAXIS */}
             <Grid item xs={12} md={4}>
               <Field label="ΑΦΜ" required error={errors.afm}>
                 <Box sx={{ display: "flex", gap: 1 }}>
@@ -409,13 +405,7 @@ export default function CustomerFormPage() {
                     fullWidth
                     size="small"
                     value={form.afm}
-                    onChange={(e) =>
-                      handleChange(
-                        "afm",
-                        e.target.value.replace(/\D/g, "").slice(0, 9),
-                      )
-                    }
-                    placeholder="123456789"
+                    onChange={(e) => handleChange("afm", e.target.value)}
                     error={!!errors.afm}
                     disabled={isEdit}
                     inputProps={{
@@ -435,7 +425,6 @@ export default function CustomerFormPage() {
                         px: 1,
                         borderColor: "#e5e7eb",
                         color: "#374151",
-                        whiteSpace: "nowrap",
                       }}
                     >
                       {taxisLoading ? <CircularProgress size={14} /> : "TAXIS"}
@@ -458,7 +447,7 @@ export default function CustomerFormPage() {
               </Field>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={5}>
               <Field label="Νόμιμος εκπρόσωπος">
                 <TextField
                   fullWidth
@@ -485,7 +474,7 @@ export default function CustomerFormPage() {
               </Field>
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Field label="Δ.Ο.Υ." required error={errors.doy}>
                 <TextField
                   fullWidth
@@ -500,7 +489,7 @@ export default function CustomerFormPage() {
           </Grid>
         </Paper>
 
-        {/* ===== ΕΠΙΚΟΙΝΩΝΙΑ ===== */}
+        {/* ── Διεύθυνση & Επικοινωνία ── */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -537,33 +526,20 @@ export default function CustomerFormPage() {
                   fullWidth
                   size="small"
                   value={form.tk}
-                  onChange={(e) =>
-                    handleChange(
-                      "tk",
-                      e.target.value.replace(/\D/g, "").slice(0, 5),
-                    )
-                  }
+                  onChange={(e) => handleChange("tk", e.target.value)}
                   error={!!errors.tk}
-                  inputProps={{
-                    maxLength: 5,
-                    style: { fontFamily: "monospace" },
-                  }}
+                  inputProps={{ maxLength: 5 }}
                   sx={inputSx}
                 />
               </Field>
             </Grid>
             <Grid item xs={12} md={4}>
-              <Field
-                label="Τηλέφωνο σταθερό"
-                required
-                error={errors.phoneFixed}
-              >
+              <Field label="Τηλέφωνο σταθερό">
                 <TextField
                   fullWidth
                   size="small"
                   value={form.phoneFixed}
                   onChange={(e) => handleChange("phoneFixed", e.target.value)}
-                  error={!!errors.phoneFixed}
                   sx={inputSx}
                 />
               </Field>
@@ -589,7 +565,6 @@ export default function CustomerFormPage() {
                 <TextField
                   fullWidth
                   size="small"
-                  type="email"
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
                   error={!!errors.email}
@@ -597,40 +572,29 @@ export default function CustomerFormPage() {
                 />
               </Field>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Field label="Ενεργός" required>
-                <FormControl fullWidth size="small">
-                  <Select
-                    value={form.active ? "true" : "false"}
-                    onChange={(e) =>
-                      handleChange("active", e.target.value === "true")
-                    }
-                    sx={{ borderRadius: 1.5, fontSize: 13 }}
-                  >
-                    <MenuItem value="true">Ναι</MenuItem>
-                    <MenuItem value="false">Όχι</MenuItem>
-                  </Select>
-                </FormControl>
-              </Field>
-            </Grid>
           </Grid>
         </Paper>
 
-        {/* ===== ΔΙΚΤΥΟ ΠΩΛΗΣΕΩΝ ===== */}
+        {/* ── Ανάθεση & Κατάσταση ── */}
         <Paper
           elevation={0}
           sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
         >
-          <SectionTitle>Δίκτυο πωλήσεων</SectionTitle>
+          <SectionTitle>Ανάθεση & Κατάσταση</SectionTitle>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
               <Field label="Network">
                 <FormControl fullWidth size="small">
                   <Select
                     value={form.networkId}
-                    onChange={(e) => handleChange("networkId", e.target.value)}
                     displayEmpty
-                    sx={{ borderRadius: 1.5, fontSize: 13 }}
+                    onChange={(e) => handleChange("networkId", e.target.value)}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 1.5,
+                        fontSize: 13,
+                      },
+                    }}
                   >
                     <MenuItem value="">
                       <em>— Κανένα —</em>
@@ -649,15 +613,20 @@ export default function CustomerFormPage() {
                 <FormControl fullWidth size="small" error={!!errors.dealerId}>
                   <Select
                     value={form.dealerId}
+                    displayEmpty
                     onChange={(e) => {
                       handleChange("dealerId", e.target.value);
                       handleChange("subDealerId", "");
                     }}
-                    displayEmpty
-                    sx={{ borderRadius: 1.5, fontSize: 13 }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 1.5,
+                        fontSize: 13,
+                      },
+                    }}
                   >
                     <MenuItem value="">
-                      <em>— Επιλογή dealer —</em>
+                      <em>— Επιλογή —</em>
                     </MenuItem>
                     {dealers.map((d) => (
                       <MenuItem key={d.id} value={d.id}>
@@ -666,23 +635,24 @@ export default function CustomerFormPage() {
                     ))}
                   </Select>
                 </FormControl>
-                {errors.dealerId && (
-                  <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                    {errors.dealerId}
-                  </Typography>
-                )}
               </Field>
             </Grid>
             <Grid item xs={12} md={4}>
               <Field label="Sub-dealer">
-                <FormControl fullWidth size="small" disabled={!form.dealerId}>
+                <FormControl fullWidth size="small">
                   <Select
                     value={form.subDealerId}
+                    displayEmpty
+                    disabled={!form.dealerId}
                     onChange={(e) =>
                       handleChange("subDealerId", e.target.value)
                     }
-                    displayEmpty
-                    sx={{ borderRadius: 1.5, fontSize: 13 }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 1.5,
+                        fontSize: 13,
+                      },
+                    }}
                   >
                     <MenuItem value="">
                       <em>— Κανένας —</em>
@@ -696,10 +666,37 @@ export default function CustomerFormPage() {
                 </FormControl>
               </Field>
             </Grid>
+            <Grid item xs={12} md={3}>
+              <Field label="Ενεργός">
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    height: 36,
+                  }}
+                >
+                  <Switch
+                    checked={form.active}
+                    onChange={(e) => handleChange("active", e.target.checked)}
+                    size="small"
+                  />
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      color: form.active ? "#16a34a" : "#9ca3af",
+                      fontWeight: form.active ? 600 : 400,
+                    }}
+                  >
+                    {form.active ? "Ναι" : "Όχι"}
+                  </Typography>
+                </Box>
+              </Field>
+            </Grid>
           </Grid>
         </Paper>
 
-        {/* ===== ΕΝΕΡΓΟΠΟΙΗΜΕΝΑ ΠΡΟΪΟΝΤΑ ===== */}
+        {/* ── Ενεργοποιημένα Προϊόντα ── */}
         <Paper
           elevation={0}
           sx={{
@@ -711,94 +708,51 @@ export default function CustomerFormPage() {
           <Box
             sx={{
               px: 3,
-              py: 2,
+              py: 1.8,
               borderBottom: "0.5px solid #e5e7eb",
               display: "flex",
               alignItems: "center",
               gap: 1,
             }}
           >
-            <SectionTitle>Ενεργοποιημένα προϊόντα</SectionTitle>
-            <Tooltip title="Τα προϊόντα ενημερώνονται από την τιμολογιέρα. Μόνο το κόστος μπορεί να αλλάξει χειροκίνητα.">
-              <InfoOutlinedIcon
-                sx={{ fontSize: 16, color: "#9ca3af", mb: 1.5, ml: 0.5 }}
-              />
+            <Typography
+              sx={{ fontSize: 14, fontWeight: 700, color: "#111827" }}
+            >
+              Ενεργοποιημένα Προϊόντα
+            </Typography>
+            <Tooltip title="Ενημερώνονται αυτόματα από την τιμολογιέρα · Μόνο το Κόστος μπορεί να αλλαχτεί χειροκίνητα">
+              <InfoOutlinedIcon sx={{ fontSize: 16, color: "#9ca3af" }} />
             </Tooltip>
           </Box>
+
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  <th
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "left",
-                      fontSize: 11,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 500,
-                      borderBottom: "0.5px solid #e5e7eb",
-                    }}
-                  >
-                    #
-                  </th>
-                  <th
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "left",
-                      fontSize: 11,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 500,
-                      borderBottom: "0.5px solid #e5e7eb",
-                    }}
-                  >
-                    Περιγραφή
-                  </th>
-                  <th
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "center",
-                      fontSize: 11,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 500,
-                      borderBottom: "0.5px solid #e5e7eb",
-                    }}
-                  >
-                    Ενεργοποιημένο
-                  </th>
-                  <th
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "left",
-                      fontSize: 11,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 500,
-                      borderBottom: "0.5px solid #e5e7eb",
-                    }}
-                  >
-                    Ημερ. Λήξης / Ποσότητα
-                  </th>
-                  <th
-                    style={{
-                      padding: "10px 16px",
-                      textAlign: "right",
-                      fontSize: 11,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      fontWeight: 500,
-                      borderBottom: "0.5px solid #e5e7eb",
-                    }}
-                  >
-                    Κόστος (€)
-                  </th>
+                <tr>
+                  {[
+                    "#",
+                    "Περιγραφή",
+                    "Ενεργοποιημένο",
+                    "Ημερ. Λήξης / Ποσότητα",
+                    "Κόστος (€)",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "10px 16px",
+                        textAlign: h === "Κόστος (€)" ? "right" : "left",
+                        fontSize: 11,
+                        color: "#9ca3af",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                        fontWeight: 500,
+                        borderBottom: "0.5px solid #e5e7eb",
+                        background: "#fafafa",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -808,15 +762,6 @@ export default function CustomerFormPage() {
                     style={{
                       borderBottom: "0.5px solid #f3f4f6",
                       background: s.active ? "#f0fdf4" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!s.active)
-                        e.currentTarget.style.background = "#f9fafb";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = s.active
-                        ? "#f0fdf4"
-                        : "transparent";
                     }}
                   >
                     <td
@@ -890,9 +835,8 @@ export default function CustomerFormPage() {
                             "& .MuiOutlinedInput-root": {
                               borderRadius: 1.5,
                               fontSize: 12,
-                              background: s.active ? "#fff" : "transparent",
+                              background: s.active ? "#fff" : "#f9fafb",
                             },
-                            "& .MuiInputBase-input": { color: "#111827" },
                           }}
                         />
                       ) : (
@@ -911,14 +855,15 @@ export default function CustomerFormPage() {
                               handleSubChange(i, "quantity", e.target.value)
                             }
                             disabled={!s.active}
-                            placeholder="0"
-                            inputProps={{ min: 0 }}
+                            inputProps={{
+                              min: 0,
+                              style: { width: 80, fontFamily: "monospace" },
+                            }}
                             sx={{
-                              width: 100,
                               "& .MuiOutlinedInput-root": {
                                 borderRadius: 1.5,
                                 fontSize: 12,
-                                background: s.active ? "#fff" : "transparent",
+                                background: s.active ? "#fff" : "#f9fafb",
                               },
                             }}
                           />
