@@ -8,11 +8,13 @@ import {
   Alert,
   Avatar,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
 import LockIcon from "@mui/icons-material/Lock";
 import { useAuth } from "../../context/AuthContext";
 import { FormSection, FormField } from "../../components/shared/EntityForm";
+import api from "../../services/api";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -23,14 +25,18 @@ export default function ProfilePage() {
   });
   const [passErrors, setPassErrors] = useState({});
   const [saved, setSaved] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setPassForm((p) => ({ ...p, [name]: value }));
     if (passErrors[name]) setPassErrors((p) => ({ ...p, [name]: "" }));
+    if (apiError) setApiError("");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // ── Client-side validation ──────────────────────────────────────
     const errors = {};
     if (!passForm.current) errors.current = "Υποχρεωτικό";
     if (!passForm.newPass) errors.newPass = "Υποχρεωτικό";
@@ -42,10 +48,28 @@ export default function ProfilePage() {
       setPassErrors(errors);
       return;
     }
-    console.log("Change password:", passForm);
-    setSaved(true);
-    setPassForm({ current: "", newPass: "", confirm: "" });
-    setTimeout(() => setSaved(false), 3000);
+
+    // ── API call ────────────────────────────────────────────────────
+    setLoading(true);
+    setApiError("");
+    try {
+      await api.patch("/profile/password", {
+        currentPassword: passForm.current,
+        newPassword: passForm.newPass,
+      });
+      setSaved(true);
+      setPassForm({ current: "", newPass: "", confirm: "" });
+      setTimeout(() => setSaved(false), 4000);
+    } catch (err) {
+      // Show the server message (e.g. "Λάθος τρέχον password") if available
+      setApiError(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          "Σφάλμα αλλαγής password",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const initials = user?.username?.slice(0, 2).toUpperCase() || "AD";
@@ -58,7 +82,7 @@ export default function ProfilePage() {
         Προφίλ
       </Typography>
 
-      {/* User info card */}
+      {/* ── User info card ─────────────────────────────────────────── */}
       <Paper
         elevation={0}
         sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb", mb: 3 }}
@@ -94,11 +118,7 @@ export default function ProfilePage() {
                 }}
               />
               <Typography
-                sx={{
-                  fontSize: 12,
-                  color: "#6b7280",
-                  letterSpacing: "0.05em",
-                }}
+                sx={{ fontSize: 12, color: "#6b7280", letterSpacing: "0.05em" }}
               >
                 {user?.role}
               </Typography>
@@ -132,7 +152,7 @@ export default function ProfilePage() {
         </Stack>
       </Paper>
 
-      {/* Change password */}
+      {/* ── Change password card ───────────────────────────────────── */}
       <Paper
         elevation={0}
         sx={{ p: 3, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -152,48 +172,62 @@ export default function ProfilePage() {
           </Alert>
         )}
 
-        <FormSection title="">
+        {apiError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {apiError}
+          </Alert>
+        )}
+
+        <FormSection>
           <FormField
-            name="current"
             label="Τρέχον password"
+            name="current"
+            type="password"
             value={passForm.current}
             onChange={handleChange}
             error={passErrors.current}
             required
-            type="password"
-            size={12}
           />
           <FormField
-            name="newPass"
             label="Νέο password"
+            name="newPass"
+            type="password"
             value={passForm.newPass}
             onChange={handleChange}
             error={passErrors.newPass}
             required
-            type="password"
-            size={6}
           />
           <FormField
+            label="Επιβεβαίωση νέου password"
             name="confirm"
-            label="Επιβεβαίωση"
+            type="password"
             value={passForm.confirm}
             onChange={handleChange}
             error={passErrors.confirm}
             required
-            type="password"
-            size={6}
           />
         </FormSection>
 
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+        <Box sx={{ mt: 3 }}>
           <Button
-            size="small"
             variant="contained"
-            startIcon={<SaveIcon />}
+            startIcon={
+              loading ? (
+                <CircularProgress size={16} sx={{ color: "white" }} />
+              ) : (
+                <SaveIcon />
+              )
+            }
             onClick={handleSave}
-            sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
+            disabled={loading}
+            sx={{
+              background: "#1f6feb",
+              borderRadius: 2,
+              fontWeight: 600,
+              "&:hover": { background: "#1a5fd6" },
+            }}
           >
-            Αποθήκευση
+            {loading ? "Αποθήκευση..." : "Αποθήκευση"}
           </Button>
         </Box>
       </Paper>

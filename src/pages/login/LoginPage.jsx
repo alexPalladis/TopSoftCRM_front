@@ -412,7 +412,7 @@ export default function LoginPage() {
               {loading ? (
                 <CircularProgress size={20} sx={{ color: "#fff" }} />
               ) : (
-                "Είσοδος →"
+                "ΕΙΣΟΔΟΣ"
               )}
             </Button>
           </form>

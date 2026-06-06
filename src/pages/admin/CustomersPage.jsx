@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,10 +21,12 @@ import {
   Snackbar,
 } from "@mui/material";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
+import ReassignSubDealerDialog from "../../components/shared/ReassignSubDealerDialog";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { customersApi } from "../../services/customers";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
@@ -48,18 +50,15 @@ export default function CustomersPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [errorSnack, setErrorSnack] = useState("");
 
-  // ── Dropdown reference data (dealers + networks for filter selects) ────────
-  //
-  // These two lists change rarely (maybe once a week when a new dealer is added).
-  // staleTime on the QueryClient is 60s globally, but we override to 5 minutes
-  // here because this data is very stable — no point refetching a dealer list
-  // every time the user navigates to CustomersPage.
-  //
-  // Result: first visit fetches once, next 5 minutes loads from cache instantly.
+  // ── Reassign state ─────────────────────────────────────────────────────────
+  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
+
+  // ── Dropdown reference data ────────────────────────────────────────────────
   const { data: dealersData } = useQuery({
     queryKey: ["dealers", "dropdown"],
     queryFn: () => dealersApi.getAll({ size: 100 }),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     select: (res) => res.data.content,
   });
   const dealers = dealersData ?? [];
@@ -67,19 +66,12 @@ export default function CustomersPage() {
   const { data: networksData } = useQuery({
     queryKey: ["networks", "dropdown"],
     queryFn: () => networksApi.getAll({ size: 100 }),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     select: (res) => res.data.content,
   });
   const networks = networksData ?? [];
 
   // ── Main customers list ────────────────────────────────────────────────────
-  //
-  // The queryKey includes all filter/pagination values. When any of them
-  // changes, React Query automatically fires a new request — no need for
-  // useCallback or manual useEffect dependency arrays.
-  //
-  // keepPreviousData (placeholderData) keeps the current page visible while
-  // the next page loads, preventing layout flicker on pagination.
   const {
     data: customersData,
     isLoading,
@@ -100,7 +92,7 @@ export default function CustomersPage() {
         ...(filterNetwork && { networkId: filterNetwork }),
         ...(filterActive !== "" && { active: filterActive }),
       }),
-    placeholderData: (prev) => prev, // keeps previous page data while next loads
+    placeholderData: (prev) => prev,
     select: (res) => res.data,
   });
 
@@ -109,11 +101,6 @@ export default function CustomersPage() {
   const totalPages = customersData?.totalPages ?? 0;
 
   // ── Delete handler ─────────────────────────────────────────────────────────
-  //
-  // After a successful delete we do two things:
-  //  1. invalidate ["customers", ...] → the list refetches with correct counts
-  //  2. invalidate ["dashboard", "customers"] → the Dashboard stat card updates
-  //     automatically the next time the user visits it (or if it's mounted)
   const handleConfirmDelete = async () => {
     setDeleteLoading(true);
     try {
@@ -163,10 +150,8 @@ export default function CustomersPage() {
             >
               Πελάτες
             </Typography>
-            {/* isFetching (not isLoading) shows a subtle indicator on
-                background refetches without hiding the table */}
             <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-              {total} εγγραφές{isFetching && !isLoading ? " · ανανέωση…" : ""}
+              {total} εγγραφές{isFetching && !isLoading ? " · ανανέωση..." : ""}
             </Typography>
           </Box>
           <Button
@@ -358,40 +343,40 @@ export default function CustomersPage() {
                           fontSize: 14,
                         }}
                       >
-                        Δεν βρέθηκαν εγγραφές
+                        Δεν βρέθηκαν πελάτες
                       </td>
                     </tr>
                   ) : (
-                    customers.map((c) => (
+                    customers.map((c, i) => (
                       <tr
                         key={c.id}
-                        style={{ borderBottom: "0.5px solid #f3f4f6" }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = "#f9fafb")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "transparent")
-                        }
+                        style={{
+                          borderBottom:
+                            i < customers.length - 1
+                              ? "0.5px solid #f3f4f6"
+                              : "none",
+                        }}
                       >
                         <td
                           style={{
                             padding: "11px 16px",
+                            fontSize: 13,
                             fontFamily: "monospace",
-                            fontSize: 12,
-                            color: "#6b7280",
+                            color: "#374151",
                           }}
                         >
                           {c.afm}
                         </td>
-                        <td
-                          style={{
-                            padding: "11px 16px",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#111827",
-                          }}
-                        >
-                          {c.eponymia}
+                        <td style={{ padding: "11px 16px" }}>
+                          <Typography
+                            sx={{
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: "#111827",
+                            }}
+                          >
+                            {c.eponymia}
+                          </Typography>
                         </td>
                         <td
                           style={{
@@ -405,8 +390,8 @@ export default function CustomersPage() {
                         <td
                           style={{
                             padding: "11px 16px",
-                            fontSize: 12,
-                            color: "#6b7280",
+                            fontSize: 13,
+                            color: "#374151",
                           }}
                         >
                           {c.dealerName || "—"}
@@ -414,8 +399,8 @@ export default function CustomersPage() {
                         <td
                           style={{
                             padding: "11px 16px",
-                            fontSize: 12,
-                            color: "#6b7280",
+                            fontSize: 13,
+                            color: "#374151",
                           }}
                         >
                           {c.networkName || "—"}
@@ -433,6 +418,21 @@ export default function CustomersPage() {
                           />
                         </td>
                         <td style={{ padding: "11px 16px" }}>
+                          <Tooltip title="Αλλαγή Sub-dealer">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setReassignTarget(c);
+                                setReassignOpen(true);
+                              }}
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#1d4ed8" },
+                              }}
+                            >
+                              <SwapHorizIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Διόρθωση">
                             <IconButton
                               size="small"
@@ -521,6 +521,18 @@ export default function CustomersPage() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleteLoading}
+      />
+
+      <ReassignSubDealerDialog
+        customer={reassignTarget}
+        open={reassignOpen}
+        onClose={() => {
+          setReassignOpen(false);
+          setReassignTarget(null);
+        }}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["customers"] });
+        }}
       />
 
       <Snackbar

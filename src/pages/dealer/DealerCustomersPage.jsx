@@ -22,13 +22,15 @@ import {
   DialogActions,
   Grid,
   Divider,
+  Snackbar,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { customersApi } from "../../services/customers";
 import { useAuth } from "../../context/AuthContext";
+import ReassignSubDealerDialog from "../../components/shared/ReassignSubDealerDialog";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", type: "DATE" },
@@ -40,6 +42,8 @@ const PRODUCTS = [
   { id: 7, description: "Ενεργά email", type: "QUANTITY" },
   { id: 8, description: "Ψηφιακό Πελατολόγιο", type: "DATE" },
 ];
+
+const PER_PAGE = 10;
 
 function DetailRow({ label, value }) {
   return (
@@ -102,7 +106,6 @@ function CustomerViewDialog({ customer, open, onClose }) {
             sx={{
               background: customer.active ? "#dcfce7" : "#fee2e2",
               color: customer.active ? "#166534" : "#991b1b",
-              fontSize: 11,
             }}
           />
           <IconButton size="small" onClick={onClose}>
@@ -135,10 +138,13 @@ function CustomerViewDialog({ customer, open, onClose }) {
             />
             <DetailRow label="Επάγγελμα" value={customer.epaggelma} />
             <DetailRow label="Δ.Ο.Υ." value={customer.doy} />
-            <DetailRow
-              label="Ενεργός"
-              value={customer.active ? "Ναι" : "Όχι"}
-            />
+            <DetailRow label="Διεύθυνση" value={customer.address} />
+            <DetailRow label="Πόλη" value={customer.city} />
+            <DetailRow label="Τ.Κ." value={customer.tk} />
+            <DetailRow label="Τηλέφωνο σταθερό" value={customer.phoneFixed} />
+            <DetailRow label="Τηλέφωνο κινητό" value={customer.phoneMobile} />
+            <DetailRow label="Email" value={customer.email} />
+            <DetailRow label="Sub-dealer" value={customer.subDealerName} />
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography
@@ -151,65 +157,31 @@ function CustomerViewDialog({ customer, open, onClose }) {
                 mb: 1,
               }}
             >
-              Επικοινωνία
+              Ενεργοποιημένα Προϊόντα
             </Typography>
-            <DetailRow label="Διεύθυνση" value={customer.address} />
-            <DetailRow label="Πόλη" value={customer.city} />
-            <DetailRow label="Τ.Κ." value={customer.tk} />
-            <DetailRow label="Σταθερό" value={customer.phoneFixed} />
-            <DetailRow label="Κινητό" value={customer.phoneMobile} />
-            <DetailRow label="Email" value={customer.email} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 1.5 }} />
-            <DetailRow label="Sub-dealer" value={customer.subDealerName} />
-          </Grid>
-          <Grid item xs={12}>
-            <Divider sx={{ mb: 1.5 }} />
-            <Box
-              sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}
-            >
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#6b7280",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Ενεργοποιημένα προϊόντα
-              </Typography>
-              <Tooltip title="Ενημερώνεται από την τιμολογιέρα">
-                <InfoOutlinedIcon sx={{ fontSize: 14, color: "#9ca3af" }} />
-              </Tooltip>
-            </Box>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "#fafafa" }}>
-                  {[
-                    "#",
-                    "Περιγραφή",
-                    "Ενεργοποιημένο",
-                    "Ημερ. Λήξης / Ποσότητα",
-                    "Κόστος",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "8px 12px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                <tr>
+                  {["Περιγραφή", "Ενεργό", "Λήξη / Ποσότητα", "Κόστος"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "8px 12px",
+                          textAlign: "left",
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          fontWeight: 500,
+                          borderBottom: "0.5px solid #e5e7eb",
+                          background: "#fafafa",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -217,26 +189,17 @@ function CustomerViewDialog({ customer, open, onClose }) {
                   <tr
                     key={s.productId}
                     style={{
-                      borderBottom: "0.5px solid #f3f4f6",
-                      background: s.active ? "#f0fdf4" : "transparent",
+                      borderBottom:
+                        i < subscriptions.length - 1
+                          ? "0.5px solid #f3f4f6"
+                          : "none",
                     }}
                   >
                     <td
                       style={{
                         padding: "8px 12px",
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {i + 1}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
                         fontSize: 13,
-                        color: "#111827",
-                        fontWeight: s.active ? 500 : 400,
+                        color: "#374151",
                       }}
                     >
                       {s.description}
@@ -246,7 +209,7 @@ function CustomerViewDialog({ customer, open, onClose }) {
                         label={s.active ? "Ναι" : "Όχι"}
                         size="small"
                         sx={{
-                          fontSize: 11,
+                          fontSize: 10,
                           height: 20,
                           background: s.active ? "#dcfce7" : "#f3f4f6",
                           color: s.active ? "#166534" : "#6b7280",
@@ -309,7 +272,11 @@ export default function DealerCustomersPage() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const PER_PAGE = 10;
+
+  // ── Reassign state ─────────────────────────────────────────────────────────
+  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [successSnack, setSuccessSnack] = useState(false);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -318,7 +285,7 @@ export default function DealerCustomersPage() {
       const params = {
         page,
         size: PER_PAGE,
-        dealerId: user?.id, // ΜΟΝΟ πελάτες αυτού του dealer
+        dealerId: user?.id,
         ...(search && { search }),
         ...(filterCity && { city: filterCity }),
         ...(filterActive !== "" && { active: filterActive }),
@@ -373,6 +340,7 @@ export default function DealerCustomersPage() {
         </Alert>
       )}
 
+      {/* Filters */}
       <Paper
         elevation={0}
         sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
@@ -446,6 +414,7 @@ export default function DealerCustomersPage() {
         </Stack>
       </Paper>
 
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -495,47 +464,41 @@ export default function DealerCustomersPage() {
                         fontSize: 14,
                       }}
                     >
-                      Δεν βρέθηκαν εγγραφές
+                      Δεν βρέθηκαν πελάτες
                     </td>
                   </tr>
                 ) : (
-                  customers.map((c) => (
+                  customers.map((c, i) => (
                     <tr
                       key={c.id}
                       style={{
-                        borderBottom: "0.5px solid #f3f4f6",
+                        borderBottom:
+                          i < customers.length - 1
+                            ? "0.5px solid #f3f4f6"
+                            : "none",
                         cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                      onClick={() => {
-                        setSelected(c);
-                        setDialogOpen(true);
                       }}
                     >
                       <td
                         style={{
                           padding: "11px 16px",
+                          fontSize: 13,
                           fontFamily: "monospace",
-                          fontSize: 12,
-                          color: "#6b7280",
+                          color: "#374151",
                         }}
                       >
                         {c.afm}
                       </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: "#111827",
-                        }}
-                      >
-                        {c.eponymia}
+                      <td style={{ padding: "11px 16px" }}>
+                        <Typography
+                          sx={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "#111827",
+                          }}
+                        >
+                          {c.eponymia}
+                        </Typography>
                       </td>
                       <td
                         style={{
@@ -559,6 +522,22 @@ export default function DealerCustomersPage() {
                         />
                       </td>
                       <td style={{ padding: "11px 16px" }}>
+                        <Tooltip title="Αλλαγή Sub-dealer">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReassignTarget(c);
+                              setReassignOpen(true);
+                            }}
+                            sx={{
+                              color: "#9ca3af",
+                              "&:hover": { color: "#1d4ed8" },
+                            }}
+                          >
+                            <SwapHorizIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Προβολή">
                           <IconButton
                             size="small"
@@ -631,6 +610,27 @@ export default function DealerCustomersPage() {
         customer={selected}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
+      />
+
+      <ReassignSubDealerDialog
+        customer={reassignTarget}
+        open={reassignOpen}
+        onClose={() => {
+          setReassignOpen(false);
+          setReassignTarget(null);
+        }}
+        onSuccess={() => {
+          setSuccessSnack(true);
+          fetchCustomers();
+        }}
+      />
+
+      <Snackbar
+        open={successSnack}
+        autoHideDuration={3000}
+        onClose={() => setSuccessSnack(false)}
+        message="Ο sub-dealer άλλαξε επιτυχώς"
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </Box>
   );
