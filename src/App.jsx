@@ -26,6 +26,7 @@ const RequestsPage = lazy(() => import("./pages/admin/RequestsPage"));
 const CommissionsPage = lazy(() => import("./pages/admin/CommissionsPage"));
 const PricelistPage = lazy(() => import("./pages/admin/PricelistPage"));
 const ProfilePage = lazy(() => import("./pages/admin/ProfilePage"));
+const AuditLogPage = lazy(() => import("./pages/admin/AuditLogPage")); // ← NEW
 
 // ─── NETWORK pages (lazy) ──────────────────────────────────────────────────
 const NetworkCustomersPage = lazy(
@@ -38,7 +39,7 @@ const NetworkDealerFormPage = lazy(
   () => import("./pages/network/NetworkDealerFormPage"),
 );
 const NetworkSubDealersPage = lazy(
-  () => import("./pages/network/NetworkSubDealersPage"),
+  () => import("./pages/network/NetworkSubdealersPage"),
 );
 const NetworkRequestsPage = lazy(
   () => import("./pages/network/NetworkRequestsPage"),
@@ -72,16 +73,20 @@ const DealerSubDealerFormPage = lazy(
 const DealerProfilePage = lazy(
   () => import("./pages/dealer/DealerProfilePage"),
 );
+const DealerSelfPage = lazy(() => import("./pages/dealer/DealerSelfPage")); // ← NEW
 
+// ─── SUBDEALER pages (lazy) ────────────────────────────────────────────────
 const SubDealerCustomersPage = lazy(
   () => import("./pages/subdealer/SubDealerCustomersPage"),
 );
-
 const SubDealerRequestsPage = lazy(
   () => import("./pages/subdealer/SubDealerRequestsPage"),
 );
+const SubDealerPricelistPage = lazy(
+  () => import("./pages/subdealer/SubDealerPricelistPage"),
+); // ← NEW
 
-// ─── Page loader — shown by Suspense while a chunk is downloading ──────────
+// ─── Page loader ────────────────────────────────────────────────────────────
 function PageLoader() {
   return (
     <Box
@@ -98,36 +103,31 @@ function PageLoader() {
   );
 }
 
-// ─── RolePage — renders the correct page component based on user role ──────
-// Used for routes that have a different page per role (same URL, diff UI).
+// ─── RolePage ───────────────────────────────────────────────────────────────
 function RolePage({ pages }) {
   const { user } = useAuth();
   const Page = pages[user?.role] || pages["ADMIN"] || Object.values(pages)[0];
   return <Page />;
 }
 
-// ─── LoginPageRouter — redirects to dashboard if already logged in ─────────
+// ─── LoginPageRouter ────────────────────────────────────────────────────────
 function LoginPageRouter() {
   const { user } = useAuth();
   if (user) return <Navigate to="/dashboard" replace />;
   return <LoginPage />;
 }
 
-// ─── App ───────────────────────────────────────────────────────────────────
+// ─── App ────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        {/*
-          Suspense must wrap the Routes so it catches lazy chunks
-          for every route transition, not just the initial load.
-        */}
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* ── Public ── */}
             <Route path="/login" element={<LoginPageRouter />} />
 
-            {/* ── Protected — all children share AdminLayout ── */}
+            {/* ── Protected — ALL children share AdminLayout via <Outlet /> ── */}
             <Route
               path="/"
               element={
@@ -138,10 +138,10 @@ export default function App() {
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
 
-              {/* Dashboard — all roles, content differs internally */}
+              {/* Dashboard */}
               <Route path="dashboard" element={<DashboardPage />} />
 
-              {/* ── Profile — all roles ── */}
+              {/* Profile — all roles */}
               <Route
                 path="profile"
                 element={
@@ -199,7 +199,7 @@ export default function App() {
                 }
               />
 
-              {/* ── Dealers — ADMIN + NETWORK ── */}
+              {/* ── Dealers ── */}
               <Route
                 path="dealers"
                 element={
@@ -208,7 +208,7 @@ export default function App() {
                       pages={{
                         ADMIN: DealersPage,
                         NETWORK: NetworkDealersPage,
-                        DEALER: DealersPage, // TODO: DealerSelfPage
+                        DEALER: DealerSelfPage, // ← fixed (was DealersPage)
                       }}
                     />
                   </RoleRoute>
@@ -241,7 +241,7 @@ export default function App() {
                 }
               />
 
-              {/* ── SubDealers — ADMIN + NETWORK + DEALER ── */}
+              {/* ── SubDealers ── */}
               <Route
                 path="subdealers"
                 element={
@@ -263,7 +263,7 @@ export default function App() {
                     <RolePage
                       pages={{
                         ADMIN: SubDealerFormPage,
-                        NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
+                        NETWORK: SubDealerFormPage,
                         DEALER: DealerSubDealerFormPage,
                       }}
                     />
@@ -277,7 +277,7 @@ export default function App() {
                     <RolePage
                       pages={{
                         ADMIN: SubDealerFormPage,
-                        NETWORK: SubDealerFormPage, // TODO: NetworkSubDealerFormPage
+                        NETWORK: SubDealerFormPage,
                         DEALER: DealerSubDealerFormPage,
                       }}
                     />
@@ -316,18 +316,27 @@ export default function App() {
                 }
               />
 
-              {/* ── Pricelist — ADMIN + NETWORK ── */}
+              {/* ── Pricelist — ALL roles (SubDealer sees own read-only) ── */}
               <Route
                 path="pricelist"
                 element={
-                  <RoleRoute allowedRoles={["ADMIN", "NETWORK", "DEALER"]}>
-                    <RolePage
-                      pages={{
-                        ADMIN: PricelistPage,
-                        NETWORK: NetworkPricelistPage,
-                        DEALER: DealerPricelistPage,
-                      }}
-                    />
+                  <RolePage
+                    pages={{
+                      ADMIN: PricelistPage,
+                      NETWORK: NetworkPricelistPage,
+                      DEALER: DealerPricelistPage,
+                      SUBDEALER: SubDealerPricelistPage, // ← NEW
+                    }}
+                  />
+                }
+              />
+
+              {/* ── Audit Log — ADMIN only ── */}
+              <Route
+                path="audit"
+                element={
+                  <RoleRoute allowedRoles={["ADMIN"]}>
+                    <AuditLogPage />
                   </RoleRoute>
                 }
               />

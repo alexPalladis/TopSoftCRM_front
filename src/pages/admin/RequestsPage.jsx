@@ -29,11 +29,14 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PendingIcon from "@mui/icons-material/Pending";
+import FilterListOffIcon from "@mui/icons-material/FilterListOff";
 import { ticketsApi } from "../../services/tickets";
 import { useAuth } from "../../context/AuthContext";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
 import { subdealersApi } from "../../services/subdealers";
+
+const PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
   { value: "PENDING", label: "Σε εκκρεμότητα" },
@@ -46,16 +49,6 @@ const ENTITY_OPTIONS = [
   { value: "SUBDEALER", label: "SubDealer" },
 ];
 
-function formatFrom(type, name) {
-  const labels = {
-    ADMIN: "Admin",
-    NETWORK: "Network",
-    DEALER: "Dealer",
-    SUBDEALER: "SubDealer",
-  };
-  return `${labels[type] || type}, ${name || "—"}`;
-}
-
 const entityColors = {
   ADMIN: { bg: "#fee2e2", color: "#991b1b" },
   NETWORK: { bg: "#ede9fe", color: "#6d28d9" },
@@ -63,360 +56,18 @@ const entityColors = {
   SUBDEALER: { bg: "#fef3c7", color: "#d97706" },
 };
 
-// ─── Ticket Form Dialog ───────────────────────────────────────────
-function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
-  const isEdit = !!ticket;
+const entityLabels = {
+  ADMIN: "Admin",
+  NETWORK: "Network",
+  DEALER: "Dealer",
+  SUBDEALER: "SubDealer",
+};
 
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    toType: "",
-    toId: "",
-    subject: "",
-    body: "",
-    status: "PENDING",
-  });
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    if (ticket) {
-      setForm({
-        date:
-          ticket.createdAt?.slice(0, 10) ||
-          new Date().toISOString().slice(0, 10),
-        toType: ticket.toType || "",
-        toId: ticket.toId || "",
-        subject: ticket.subject || "",
-        body: ticket.body || "",
-        status: ticket.status || "PENDING",
-      });
-    } else {
-      setForm({
-        date: new Date().toISOString().slice(0, 10),
-        toType: "",
-        toId: "",
-        subject: "",
-        body: "",
-        status: "PENDING",
-      });
-    }
-    setErrors({});
-  }, [ticket, open]);
-
-  useEffect(() => {
-    if (!form.toType) {
-      setOptions([]);
-      if (!isEdit) setForm((p) => ({ ...p, toId: "" }));
-      return;
-    }
-    const fetch = async () => {
-      try {
-        let res;
-        if (form.toType === "NETWORK")
-          res = await networksApi.getAll({ size: 100 });
-        if (form.toType === "DEALER")
-          res = await dealersApi.getAll({ size: 100 });
-        if (form.toType === "SUBDEALER")
-          res = await subdealersApi.getAll({ size: 100 });
-        setOptions(
-          res.data.content.map((e) => ({ value: e.id, label: e.eponymia })),
-        );
-      } catch {}
-    };
-    fetch();
-  }, [form.toType]);
-
-  const validate = () => {
-    const e = {};
-    if (!form.toType) e.toType = "Υποχρεωτικό";
-    if (!form.toId) e.toId = "Υποχρεωτικό";
-    if (!form.subject) e.subject = "Υποχρεωτικό";
-    if (!form.body) e.body = "Υποχρεωτικό";
-    return e;
-  };
-
-  const handleSubmit = async () => {
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
-    setLoading(true);
-    try {
-      const payload = {
-        fromType: currentUser?.role || "ADMIN",
-        fromId: currentUser?.id || "00000001",
-        toType: form.toType,
-        toId: form.toId,
-        subject: form.subject,
-        body: form.body,
-        status: form.status,
-      };
-      if (isEdit) await ticketsApi.update(ticket.id, payload);
-      else await ticketsApi.create(payload);
-      onSaved();
-      onClose();
-    } catch (err) {
-      alert(err.response?.data?.error || "Σφάλμα αποθήκευσης");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const inputSx = {
-    "& .MuiOutlinedInput-root": { borderRadius: 1.5, fontSize: 13 },
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          pb: 1,
-        }}
-      >
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>
-          {isEdit ? "Διόρθωση αιτήματος" : "Νέο αίτημα"}
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Grid container spacing={2}>
-          {/* Ημερομηνία */}
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{ fontSize: 12, color: "#374151", mb: 0.5, fontWeight: 500 }}
-            >
-              Ημερομηνία
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                ...inputSx,
-                "& .MuiOutlinedInput-root": {
-                  background: "#fff",
-                  color: "#111827",
-                  borderRadius: 1.5,
-                  fontSize: 13,
-                },
-              }}
-            />
-          </Grid>
-
-          {/* Κατάσταση */}
-          <Grid item xs={12} md={6}>
-            <Typography
-              sx={{ fontSize: 12, color: "#374151", mb: 0.5, fontWeight: 500 }}
-            >
-              Κατάσταση
-            </Typography>
-            <FormControl fullWidth size="small">
-              <Select
-                value={form.status}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, status: e.target.value }))
-                }
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          {/* Αίτημα προς */}
-          <Grid item xs={12} md={5}>
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: errors.toType ? "#ef4444" : "#374151",
-                mb: 0.5,
-                fontWeight: 500,
-              }}
-            >
-              Αίτημα προς <span style={{ color: "#ef4444" }}>*</span>
-            </Typography>
-            <FormControl fullWidth size="small" error={!!errors.toType}>
-              <Select
-                value={form.toType}
-                onChange={(e) => {
-                  setForm((p) => ({ ...p, toType: e.target.value, toId: "" }));
-                  setErrors((p) => ({ ...p, toType: "" }));
-                }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
-              >
-                <MenuItem value="">
-                  <em>— Επιλογή —</em>
-                </MenuItem>
-                {ENTITY_OPTIONS.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {errors.toType && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.toType}
-              </Typography>
-            )}
-          </Grid>
-
-          {/* Επωνυμία */}
-          <Grid item xs={12} md={7}>
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: errors.toId ? "#ef4444" : "#374151",
-                mb: 0.5,
-                fontWeight: 500,
-              }}
-            >
-              Επωνυμία <span style={{ color: "#ef4444" }}>*</span>
-            </Typography>
-            <FormControl
-              fullWidth
-              size="small"
-              disabled={!form.toType}
-              error={!!errors.toId}
-            >
-              <Select
-                value={form.toId}
-                onChange={(e) => {
-                  setForm((p) => ({ ...p, toId: e.target.value }));
-                  setErrors((p) => ({ ...p, toId: "" }));
-                }}
-                displayEmpty
-                sx={{ borderRadius: 1.5, fontSize: 13 }}
-              >
-                <MenuItem value="">
-                  <em>
-                    {form.toType
-                      ? "— Επιλογή επωνυμίας —"
-                      : "— Επιλέξτε τύπο πρώτα —"}
-                  </em>
-                </MenuItem>
-                {options.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {errors.toId && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.toId}
-              </Typography>
-            )}
-          </Grid>
-
-          {/* Θέμα */}
-          <Grid item xs={12}>
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: errors.subject ? "#ef4444" : "#374151",
-                mb: 0.5,
-                fontWeight: 500,
-              }}
-            >
-              Θέμα <span style={{ color: "#ef4444" }}>*</span>
-            </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              value={form.subject}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, subject: e.target.value }));
-                setErrors((p) => ({ ...p, subject: "" }));
-              }}
-              error={!!errors.subject}
-              sx={inputSx}
-            />
-            {errors.subject && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.subject}
-              </Typography>
-            )}
-          </Grid>
-
-          {/* Αίτημα */}
-          <Grid item xs={12}>
-            <Typography
-              sx={{
-                fontSize: 12,
-                color: errors.body ? "#ef4444" : "#374151",
-                mb: 0.5,
-                fontWeight: 500,
-              }}
-            >
-              Αίτημα <span style={{ color: "#ef4444" }}>*</span>
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              size="small"
-              value={form.body}
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: { notched: true },
-              }}
-              onChange={(e) => {
-                setForm((p) => ({ ...p, body: e.target.value }));
-                setErrors((p) => ({ ...p, body: "" }));
-              }}
-              error={!!errors.body}
-              sx={inputSx}
-            />
-            {errors.body && (
-              <Typography sx={{ fontSize: 11, color: "#ef4444", mt: 0.3 }}>
-                {errors.body}
-              </Typography>
-            )}
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Άκυρο
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          disabled={loading}
-          onClick={handleSubmit}
-          sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
-        >
-          {loading ? "Αποθήκευση..." : isEdit ? "Αποθήκευση" : "Αποστολή"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+function formatFrom(type, name) {
+  return `${entityLabels[type] || type}, ${name || "—"}`;
 }
 
-// ─── View Dialog ──────────────────────────────────────────────────
+// ─── View Dialog ───────────────────────────────────────────────────────────────
 function TicketViewDialog({ ticket, open, onClose, onComplete }) {
   if (!ticket) return null;
   const fromColors = entityColors[ticket.fromType] || entityColors.ADMIN;
@@ -461,8 +112,7 @@ function TicketViewDialog({ ticket, open, onClose, onComplete }) {
             }
             sx={{
               background: ticket.status === "PENDING" ? "#fef3c7" : "#dcfce7",
-              color: ticket.status === "PENDING" ? "#d97706" : "#166534",
-              fontSize: 11,
+              color: ticket.status === "PENDING" ? "#b45309" : "#166534",
             }}
           />
           <IconButton size="small" onClick={onClose}>
@@ -470,117 +120,45 @@ function TicketViewDialog({ ticket, open, onClose, onComplete }) {
           </IconButton>
         </Box>
       </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
-        <Box sx={{ display: "flex", gap: 2, mb: 2.5 }}>
-          <Box
+
+      <DialogContent sx={{ pt: 1 }}>
+        <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" useFlexGap>
+          <Chip
+            size="small"
+            label={`Από: ${formatFrom(ticket.fromType, ticket.fromName)}`}
             sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
+              background: fromColors.bg,
+              color: fromColors.color,
+              fontSize: 11,
             }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
-              }}
-            >
-              Αίτημα από
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 26,
-                  height: 26,
-                  background: fromColors.bg,
-                  color: fromColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {ticket.fromName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatFrom(ticket.fromType, ticket.fromName)}
-              </Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", color: "#9ca3af" }}>
-            →
-          </Box>
-          <Box
+          />
+          <Chip
+            size="small"
+            label={`Προς: ${formatFrom(ticket.toType, ticket.toName)}`}
             sx={{
-              flex: 1,
-              background: "#f9fafb",
-              border: "0.5px solid #e5e7eb",
-              borderRadius: 2,
-              p: 1.5,
+              background: toColors.bg,
+              color: toColors.color,
+              fontSize: 11,
             }}
-          >
-            <Typography
-              sx={{
-                fontSize: 10,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                mb: 0.8,
-              }}
-            >
-              Αίτημα προς
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar
-                sx={{
-                  width: 26,
-                  height: 26,
-                  background: toColors.bg,
-                  color: toColors.color,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {ticket.toName?.charAt(0)}
-              </Avatar>
-              <Typography
-                sx={{ fontSize: 12, fontWeight: 500, color: "#111827" }}
-              >
-                {formatFrom(ticket.toType, ticket.toName)}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-        <Box
+          />
+        </Stack>
+        <Divider sx={{ mb: 2 }} />
+        <Typography
           sx={{
-            background: "#f9fafb",
-            border: "0.5px solid #e5e7eb",
-            borderRadius: 2,
-            p: 2,
+            fontSize: 10,
+            color: "#9ca3af",
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            mb: 1,
           }}
         >
-          <Typography
-            sx={{
-              fontSize: 11,
-              color: "#9ca3af",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              mb: 1,
-            }}
-          >
-            Αίτημα
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
-            {ticket.body}
-          </Typography>
-        </Box>
+          Αίτημα
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
+          {ticket.body}
+        </Typography>
       </DialogContent>
+
       <DialogActions
         sx={{
           px: 3,
@@ -608,7 +186,265 @@ function TicketViewDialog({ ticket, open, onClose, onComplete }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────
+// ─── Form Dialog ───────────────────────────────────────────────────────────────
+function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
+  const isEdit = !!ticket;
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    toType: "",
+    toId: "",
+    subject: "",
+    body: "",
+    status: "PENDING",
+  });
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (ticket) {
+      setForm({
+        date:
+          ticket.createdAt?.slice(0, 10) ||
+          new Date().toISOString().slice(0, 10),
+        toType: ticket.toType || "",
+        toId: ticket.toId || "",
+        subject: ticket.subject || "",
+        body: ticket.body || "",
+        status: ticket.status || "PENDING",
+      });
+    } else {
+      setForm({
+        date: new Date().toISOString().slice(0, 10),
+        toType: "",
+        toId: "",
+        subject: "",
+        body: "",
+        status: "PENDING",
+      });
+    }
+    setErrors({});
+  }, [ticket, open]);
+
+  useEffect(() => {
+    if (!form.toType) {
+      setOptions([]);
+      if (!isEdit) setForm((p) => ({ ...p, toId: "" }));
+      return;
+    }
+    const load = async () => {
+      try {
+        let res;
+        if (form.toType === "NETWORK")
+          res = await networksApi.getAll({ size: 200 });
+        if (form.toType === "DEALER")
+          res = await dealersApi.getAll({ size: 500 });
+        if (form.toType === "SUBDEALER")
+          res = await subdealersApi.getAll({ size: 500 });
+        setOptions(res?.data?.content ?? []);
+      } catch {
+        setOptions([]);
+      }
+    };
+    load();
+  }, [form.toType, isEdit]);
+
+  const validate = () => {
+    const e = {};
+    if (!form.toType) e.toType = "Υποχρεωτικό";
+    if (!form.toId) e.toId = "Υποχρεωτικό";
+    if (!form.subject) e.subject = "Υποχρεωτικό";
+    if (!form.body) e.body = "Υποχρεωτικό";
+    return e;
+  };
+
+  const handleSubmit = async () => {
+    const e = validate();
+    if (Object.keys(e).length) {
+      setErrors(e);
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        fromType: "ADMIN",
+        fromId: currentUser?.id,
+        toType: form.toType,
+        toId: form.toId,
+        subject: form.subject,
+        body: form.body,
+      };
+      if (isEdit) await ticketsApi.update(ticket.id, payload);
+      else await ticketsApi.create(payload);
+      onSaved();
+    } catch (err) {
+      setErrors({ global: err.response?.data?.error || "Σφάλμα αποθήκευσης" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputSx = {
+    "& .MuiOutlinedInput-root": { borderRadius: 1.5, fontSize: 13 },
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
+    >
+      <DialogTitle
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <Typography sx={{ fontSize: 16, fontWeight: 600 }}>
+          {isEdit ? "Επεξεργασία αιτήματος" : "Νέο αίτημα"}
+        </Typography>
+        <IconButton size="small" onClick={onClose}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ pt: 2 }}>
+        {errors.global && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {errors.global}
+          </Alert>
+        )}
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: errors.toType ? "#ef4444" : "#374151",
+                mb: 0.5,
+                fontWeight: 500,
+              }}
+            >
+              Αίτημα προς (τύπος) <span style={{ color: "#ef4444" }}>*</span>
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={form.toType}
+              error={!!errors.toType}
+              sx={inputSx}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, toType: e.target.value, toId: "" }));
+                setErrors((p) => ({ ...p, toType: "" }));
+              }}
+            >
+              {ENTITY_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: errors.toId ? "#ef4444" : "#374151",
+                mb: 0.5,
+                fontWeight: 500,
+              }}
+            >
+              Επωνυμία <span style={{ color: "#ef4444" }}>*</span>
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={form.toId}
+              error={!!errors.toId}
+              disabled={!form.toType}
+              sx={inputSx}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, toId: e.target.value }));
+                setErrors((p) => ({ ...p, toId: "" }));
+              }}
+            >
+              {options.map((o) => (
+                <MenuItem key={o.id} value={o.id}>
+                  {o.eponymia}
+                </MenuItem>
+              ))}
+            </Select>
+          </Grid>
+          <Grid item xs={12}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: errors.subject ? "#ef4444" : "#374151",
+                mb: 0.5,
+                fontWeight: 500,
+              }}
+            >
+              Θέμα <span style={{ color: "#ef4444" }}>*</span>
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              value={form.subject}
+              error={!!errors.subject}
+              sx={inputSx}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, subject: e.target.value }));
+                setErrors((p) => ({ ...p, subject: "" }));
+              }}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                color: errors.body ? "#ef4444" : "#374151",
+                mb: 0.5,
+                fontWeight: 500,
+              }}
+            >
+              Αίτημα <span style={{ color: "#ef4444" }}>*</span>
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              size="small"
+              value={form.body}
+              error={!!errors.body}
+              sx={inputSx}
+              onChange={(e) => {
+                setForm((p) => ({ ...p, body: e.target.value }));
+                setErrors((p) => ({ ...p, body: "" }));
+              }}
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
+        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
+          Άκυρο
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={loading}
+          onClick={handleSubmit}
+          sx={{ background: "#1f6feb", "&:hover": { background: "#1a5fd6" } }}
+        >
+          {loading ? "Αποθήκευση..." : isEdit ? "Αποθήκευση" : "Αποστολή"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function RequestsPage() {
   const { user } = useAuth();
 
@@ -617,23 +453,31 @@ export default function RequestsPage() {
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(0);
+
+  // ── Filters — all passed to backend, no client-side filtering ──────────────
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [page, setPage] = useState(0);
 
   const [viewTicket, setViewTicket] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [formTicket, setFormTicket] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
 
-  const PER_PAGE = 10;
-
+  // ── Server-side fetch — filters go as query params ─────────────────────────
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await ticketsApi.getAll({ page, size: PER_PAGE });
+      const params = {
+        page,
+        size: PER_PAGE,
+        ...(filterStatus && { status: filterStatus }),
+        ...(filterDateFrom && { dateFrom: filterDateFrom }),
+        ...(filterDateTo && { dateTo: filterDateTo }),
+      };
+      const res = await ticketsApi.getAll(params);
       setTickets(res.data.content);
       setTotal(res.data.totalElements);
       setTotalPages(res.data.totalPages);
@@ -642,11 +486,24 @@ export default function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, filterStatus, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  // Reset page when filter changes
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setPage(0);
+  };
+
+  const clearFilters = () => {
+    setFilterStatus("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setPage(0);
+  };
 
   const handleComplete = async (id) => {
     try {
@@ -670,24 +527,7 @@ export default function RequestsPage() {
     }
   };
 
-  const openNew = () => {
-    setFormTicket(null);
-    setFormOpen(true);
-  };
-  const openEdit = (t) => {
-    setFormTicket(t);
-    setFormOpen(true);
-  };
-
-  // Client-side φίλτρα ημερομηνίας & κατάστασης
-  const filtered = tickets.filter((t) => {
-    const date = t.createdAt?.slice(0, 10) || "";
-    const matchFrom = !filterDateFrom || date >= filterDateFrom;
-    const matchTo = !filterDateTo || date <= filterDateTo;
-    const matchStatus = !filterStatus || t.status === filterStatus;
-    return matchFrom && matchTo && matchStatus;
-  });
-
+  const hasFilters = filterStatus || filterDateFrom || filterDateTo;
   const pendingCount = tickets.filter((t) => t.status === "PENDING").length;
 
   const thStyle = {
@@ -723,99 +563,82 @@ export default function RequestsPage() {
             </Typography>
             {pendingCount > 0 && (
               <Chip
-                label={`${pendingCount} σε εκκρεμότητα`}
+                label={`${pendingCount} εκκρεμή`}
                 size="small"
-                sx={{
-                  background: "#fee2e2",
-                  color: "#991b1b",
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}
+                sx={{ background: "#fee2e2", color: "#991b1b", fontSize: 11 }}
               />
             )}
           </Box>
           <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές
+            {total} σύνολο εγγραφών
           </Typography>
         </Box>
         <Button
           variant="contained"
+          size="small"
           startIcon={<AddIcon />}
-          onClick={openNew}
+          onClick={() => {
+            setFormTicket(null);
+            setFormOpen(true);
+          }}
           sx={{
             background: "#1f6feb",
-            borderRadius: 2,
-            fontWeight: 600,
             "&:hover": { background: "#1a5fd6" },
+            fontWeight: 600,
           }}
         >
-          ΝΕΟ ΑΙΤΗΜΑ
+          Νέο αίτημα
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Φίλτρα */}
+      {/* Filters — server-side */}
       <Paper
         elevation={0}
-        sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
+        sx={{ p: 2, mb: 2, border: "0.5px solid #e5e7eb", borderRadius: 2 }}
       >
         <Stack
           direction="row"
           spacing={1.5}
           flexWrap="wrap"
-          alignItems="center"
           useFlexGap
+          alignItems="center"
         >
           <TextField
-            size="small"
             label="Από ημερομηνία"
             type="date"
+            size="small"
             value={filterDateFrom}
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
             }}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
-            sx={{
-              width: 170,
-              "& .MuiOutlinedInput-root": {
-                background: "#fff",
-                color: "#111827",
-                borderRadius: 1.5,
-              },
-            }}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateFrom)(e.target.value)
+            }
+            sx={{ minWidth: 165 }}
           />
           <TextField
-            size="small"
             label="Έως ημερομηνία"
             type="date"
+            size="small"
             value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
             slotProps={{
               inputLabel: { shrink: true },
               input: { notched: true },
             }}
-            sx={{
-              width: 170,
-              "& .MuiOutlinedInput-root": {
-                background: "#fff",
-                color: "#111827",
-                borderRadius: 1.5,
-              },
-            }}
+            onChange={(e) =>
+              handleFilterChange(setFilterDateTo)(e.target.value)
+            }
+            sx={{ minWidth: 165 }}
           />
           <FormControl size="small" sx={{ minWidth: 190 }}>
             <InputLabel>Κατάσταση</InputLabel>
             <Select
               value={filterStatus}
               label="Κατάσταση"
-              onChange={(e) => setFilterStatus(e.target.value)}
-              sx={{ borderRadius: 1.5 }}
+              onChange={(e) =>
+                handleFilterChange(setFilterStatus)(e.target.value)
+              }
             >
               <MenuItem value="">Όλα</MenuItem>
               {STATUS_OPTIONS.map((o) => (
@@ -825,23 +648,23 @@ export default function RequestsPage() {
               ))}
             </Select>
           </FormControl>
-          {(filterDateFrom || filterDateTo || filterStatus) && (
-            <Button
-              size="small"
-              onClick={() => {
-                setFilterDateFrom("");
-                setFilterDateTo("");
-                setFilterStatus("");
-              }}
-              sx={{ color: "#9ca3af", fontSize: 12 }}
-            >
-              Καθαρισμός ✕
-            </Button>
+          {hasFilters && (
+            <Tooltip title="Καθαρισμός φίλτρων">
+              <IconButton size="small" onClick={clearFilters}>
+                <FilterListOffIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           )}
         </Stack>
       </Paper>
 
-      {/* Πίνακας */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -863,213 +686,207 @@ export default function RequestsPage() {
                   <th style={thStyle}>Αίτημα από</th>
                   <th style={thStyle}>Αίτημα προς</th>
                   <th style={thStyle}>Θέμα</th>
-                  <th style={thStyle}>Αίτημα</th>
                   <th style={thStyle}>Κατάσταση</th>
-                  <th style={thStyle}></th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>Ενέργειες</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {tickets.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={6}
                       style={{
-                        padding: 40,
+                        padding: 32,
                         textAlign: "center",
                         color: "#9ca3af",
-                        fontSize: 14,
+                        fontSize: 13,
                       }}
                     >
-                      Δεν βρέθηκαν εγγραφές
+                      Δεν βρέθηκαν αιτήματα
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((t) => (
-                    <tr
-                      key={t.id}
-                      style={{
-                        borderBottom: "0.5px solid #f3f4f6",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                    >
-                      <td
+                  tickets.map((t, idx) => {
+                    const fromC =
+                      entityColors[t.fromType] || entityColors.ADMIN;
+                    const toC = entityColors[t.toType] || entityColors.ADMIN;
+                    return (
+                      <tr
+                        key={t.id}
                         style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#6b7280",
-                          whiteSpace: "nowrap",
+                          background: idx % 2 === 0 ? "#fff" : "#fafafa",
                         }}
                       >
-                        {t.createdAt?.slice(0, 10)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#374151",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {formatFrom(t.fromType, t.fromName)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "11px 16px",
-                          fontSize: 12,
-                          color: "#374151",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {formatFrom(t.toType, t.toName)}
-                      </td>
-                      <td style={{ padding: "11px 16px", maxWidth: 160 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#111827",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 160,
-                          }}
-                        >
-                          {t.subject}
-                        </Typography>
-                      </td>
-                      <td style={{ padding: "11px 16px", maxWidth: 200 }}>
-                        <Typography
-                          sx={{
+                        <td
+                          style={{
+                            padding: "8px 16px",
                             fontSize: 12,
                             color: "#6b7280",
                             whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 200,
                           }}
                         >
-                          {t.body}
-                        </Typography>
-                      </td>
-                      <td style={{ padding: "11px 16px" }}>
-                        <Chip
-                          label={
-                            t.status === "PENDING"
-                              ? "Σε εκκρεμότητα"
-                              : "Ολοκληρώθηκε"
-                          }
-                          size="small"
-                          sx={{
-                            fontSize: 11,
-                            height: 22,
-                            background:
-                              t.status === "PENDING" ? "#fef3c7" : "#dcfce7",
-                            color:
-                              t.status === "PENDING" ? "#d97706" : "#166534",
+                          {t.createdAt?.slice(0, 10)}
+                        </td>
+                        <td style={{ padding: "8px 16px" }}>
+                          <Chip
+                            size="small"
+                            label={formatFrom(t.fromType, t.fromName)}
+                            sx={{
+                              background: fromC.bg,
+                              color: fromC.color,
+                              fontSize: 11,
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "8px 16px" }}>
+                          <Chip
+                            size="small"
+                            label={formatFrom(t.toType, t.toName)}
+                            sx={{
+                              background: toC.bg,
+                              color: toC.color,
+                              fontSize: 11,
+                            }}
+                          />
+                        </td>
+                        <td
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: 13,
+                            color: "#111827",
+                            maxWidth: 300,
                           }}
-                        />
-                      </td>
-                      <td
-                        style={{ padding: "11px 16px", whiteSpace: "nowrap" }}
-                      >
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setViewTicket(t);
-                              setViewOpen(true);
-                            }}
+                        >
+                          <Typography
                             sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
+                              fontSize: 13,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 260,
                             }}
                           >
-                            <CheckCircleIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Διόρθωση">
-                          <IconButton
+                            {t.subject}
+                          </Typography>
+                        </td>
+                        <td style={{ padding: "8px 16px" }}>
+                          <Chip
                             size="small"
-                            onClick={() => openEdit(t)}
+                            label={
+                              t.status === "PENDING"
+                                ? "Εκκρεμεί"
+                                : "Ολοκληρώθηκε"
+                            }
+                            icon={
+                              t.status === "PENDING" ? (
+                                <PendingIcon />
+                              ) : (
+                                <CheckCircleIcon />
+                              )
+                            }
                             sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#f59e0b" },
+                              background:
+                                t.status === "PENDING" ? "#fef3c7" : "#dcfce7",
+                              color:
+                                t.status === "PENDING" ? "#b45309" : "#166534",
+                              fontSize: 11,
                             }}
-                          >
-                            <EditIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Διαγραφή">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDelete(t.id)}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#ef4444" },
-                            }}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  ))
+                          />
+                        </td>
+                        <td
+                          style={{
+                            padding: "4px 16px",
+                            textAlign: "center",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <Tooltip title="Προβολή">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setViewTicket(t);
+                                setViewOpen(true);
+                              }}
+                              sx={{ color: "#6b7280" }}
+                            >
+                              <Avatar
+                                sx={{
+                                  width: 22,
+                                  height: 22,
+                                  background: "#f3f4f6",
+                                  color: "#374151",
+                                  fontSize: 12,
+                                }}
+                              >
+                                👁
+                              </Avatar>
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Επεξεργασία">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setFormTicket(t);
+                                setFormOpen(true);
+                              }}
+                              sx={{ color: "#6b7280" }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Διαγραφή">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDelete(t.id)}
+                              sx={{ color: "#ef4444" }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </Box>
         )}
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            borderTop: "0.5px solid #e5e7eb",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>
-            {total === 0
-              ? "0"
-              : `${page * PER_PAGE + 1}–${Math.min((page + 1) * PER_PAGE, total)}`}{" "}
-            από {total} εγγραφές
-          </Typography>
-          <Stack direction="row" spacing={0.5}>
-            {[...Array(totalPages)].map((_, i) => (
-              <Box
-                key={i}
-                onClick={() => setPage(i)}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  fontWeight: page === i ? 600 : 400,
-                  background: page === i ? "#1f6feb" : "transparent",
-                  color: page === i ? "#fff" : "#6b7280",
-                  border: "0.5px solid",
-                  borderColor: page === i ? "#1f6feb" : "#e5e7eb",
-                }}
-              >
-                {i + 1}
-              </Box>
-            ))}
-          </Stack>
-        </Box>
       </Paper>
 
-      {/* Dialogs */}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 2,
+            mt: 2,
+          }}
+        >
+          <Button
+            size="small"
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+            sx={{ color: "#374151" }}
+          >
+            ← Προηγούμενη
+          </Button>
+          <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
+            Σελίδα {page + 1} / {totalPages}
+          </Typography>
+          <Button
+            size="small"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => p + 1)}
+            sx={{ color: "#374151" }}
+          >
+            Επόμενη →
+          </Button>
+        </Box>
+      )}
+
       <TicketViewDialog
         ticket={viewTicket}
         open={viewOpen}
@@ -1077,11 +894,14 @@ export default function RequestsPage() {
         onComplete={handleComplete}
       />
       <TicketFormDialog
-        ticket={formTicket}
         open={formOpen}
-        onClose={() => setFormOpen(false)}
-        onSaved={fetchTickets}
+        ticket={formTicket}
         currentUser={user}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => {
+          setFormOpen(false);
+          fetchTickets();
+        }}
       />
     </Box>
   );

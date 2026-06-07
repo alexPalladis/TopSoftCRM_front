@@ -53,13 +53,20 @@ export function getNavItems(role) {
       roles: [ROLES.ADMIN, ROLES.NETWORK, ROLES.DEALER],
     },
 
-    // ADMIN + NETWORK + DEALER — each sees their own read-only pricelist
-    // (ADMIN edits it, NETWORK and DEALER only view it)
+    // ALL roles with pricelist — SUBDEALER sees read-only own commissions
     {
       label: "Τιμοκατάλογος",
       path: "/pricelist",
       icon: "LocalOffer",
-      roles: [ROLES.ADMIN, ROLES.NETWORK, ROLES.DEALER],
+      roles: [ROLES.ADMIN, ROLES.NETWORK, ROLES.DEALER, ROLES.SUBDEALER],
+    },
+
+    // ADMIN only — audit trail
+    {
+      label: "Audit Log",
+      path: "/audit",
+      icon: "History",
+      roles: [ROLES.ADMIN],
     },
   ];
 

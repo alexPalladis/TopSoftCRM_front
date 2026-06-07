@@ -10,13 +10,13 @@ import {
   ListItemText,
   Typography,
   Avatar,
-  Divider,
   IconButton,
   Toolbar,
   AppBar,
   Badge,
   Tooltip,
   Chip,
+  useTheme,
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PeopleIcon from "@mui/icons-material/People";
@@ -26,10 +26,14 @@ import PersonIcon from "@mui/icons-material/Person";
 import InboxIcon from "@mui/icons-material/Inbox";
 import PercentIcon from "@mui/icons-material/Percent";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 import { useAuth } from "../../context/AuthContext";
+import { useThemeMode } from "../../context/ThemeContext";
 import { getNavItems } from "../../utils/roleUtils";
 import { ticketsApi } from "../../services/tickets";
 
@@ -44,6 +48,7 @@ const iconMap = {
   Inbox: <InboxIcon fontSize="small" />,
   Percent: <PercentIcon fontSize="small" />,
   LocalOffer: <LocalOfferIcon fontSize="small" />,
+  History: <HistoryIcon fontSize="small" />,
 };
 
 const roleColors = {
@@ -55,13 +60,13 @@ const roleColors = {
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
+  const { mode, toggleMode } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
   const navItems = getNavItems(user?.role);
+  const isDark = mode === "dark";
 
-  // ── Live pending requests count ───────────────────────────────────────────
-  // Fetched once on mount and again every 60 seconds.
-  // Shown in the sidebar chip and the topbar bell badge.
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
@@ -70,13 +75,11 @@ export default function AdminLayout() {
         const res = await ticketsApi.pendingCount();
         setPendingCount(res.data ?? 0);
       } catch {
-        // Silently ignore — badge stays at its last value
+        /* silent */
       }
     };
-
-    fetchPending(); // immediate call on mount
-
-    const interval = setInterval(fetchPending, 60_000); // refresh every 60s
+    fetchPending();
+    const interval = setInterval(fetchPending, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -88,18 +91,34 @@ export default function AdminLayout() {
   const initials = user?.username?.slice(0, 2).toUpperCase() || "??";
   const roleColor = roleColors[user?.role] || "#6b7280";
 
+  // ── Adaptive colors ────────────────────────────────────────────────────────
+  const sidebarBg = isDark ? "#161b22" : "#fff";
+  const sidebarBdr = isDark ? "#30363d" : "#e5e7eb";
+  const topbarBg = isDark ? "#161b22" : "#fff";
+  const pageContentBg = isDark ? "#0d1117" : "#f8f9fb";
+  const textPrimary = isDark ? "#e6edf3" : "#111827";
+  const textMuted = isDark ? "#8b949e" : "#6b7280";
+  const activeItemBg = isDark ? "#1f2937" : "#eff6ff";
+  const activeColor = isDark ? "#58a6ff" : "#1d4ed8";
+  const roleBadgeBg = isDark ? "#1f2937" : "#eff6ff";
+  const roleBadgeBdr = isDark ? "#30363d" : "#bfdbfe";
+
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", background: "#f8f9fb" }}>
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+    <Box
+      sx={{ display: "flex", minHeight: "100vh", background: pageContentBg }}
+    >
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <Drawer
         variant="permanent"
         sx={{
           width: SIDEBAR_WIDTH,
+          flexShrink: 0,
           "& .MuiDrawer-paper": {
             width: SIDEBAR_WIDTH,
-            background: "#fff",
+            boxSizing: "border-box",
+            background: sidebarBg,
             border: "none",
-            borderRight: "0.5px solid #e5e7eb",
+            borderRight: `0.5px solid ${sidebarBdr}`,
             display: "flex",
             flexDirection: "column",
           },
@@ -109,7 +128,7 @@ export default function AdminLayout() {
         <Box
           sx={{
             p: 2,
-            borderBottom: "0.5px solid #e5e7eb",
+            borderBottom: `0.5px solid ${sidebarBdr}`,
             display: "flex",
             alignItems: "center",
             gap: 1.5,
@@ -132,7 +151,9 @@ export default function AdminLayout() {
           >
             T
           </Box>
-          <Typography sx={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>
+          <Typography
+            sx={{ fontWeight: 600, fontSize: 14, color: textPrimary }}
+          >
             TopSoft CRM
           </Typography>
         </Box>
@@ -141,8 +162,8 @@ export default function AdminLayout() {
         <Box sx={{ px: 1.5, py: 1 }}>
           <Box
             sx={{
-              background: "#eff6ff",
-              border: "0.5px solid #bfdbfe",
+              background: roleBadgeBg,
+              border: `0.5px solid ${roleBadgeBdr}`,
               borderRadius: 1.5,
               px: 1.5,
               py: 0.8,
@@ -162,7 +183,7 @@ export default function AdminLayout() {
             <Typography
               sx={{
                 fontSize: 11,
-                color: "#1d4ed8",
+                color: activeColor,
                 fontWeight: 600,
                 letterSpacing: "0.06em",
               }}
@@ -184,11 +205,14 @@ export default function AdminLayout() {
                   sx={{
                     borderRadius: 1.5,
                     borderLeft: active
-                      ? "2px solid #1d4ed8"
+                      ? `2px solid ${activeColor}`
                       : "2px solid transparent",
-                    background: active ? "#eff6ff" : "transparent",
-                    color: active ? "#1d4ed8" : "#6b7280",
-                    "&:hover": { background: "#f9fafb", color: "#111827" },
+                    background: active ? activeItemBg : "transparent",
+                    color: active ? activeColor : textMuted,
+                    "&:hover": {
+                      background: isDark ? "#1f2937" : "#f9fafb",
+                      color: textPrimary,
+                    },
                     py: 0.9,
                   }}
                 >
@@ -202,7 +226,6 @@ export default function AdminLayout() {
                       fontWeight: active ? 600 : 400,
                     }}
                   />
-                  {/* Live pending count chip — only on Αιτήματα row */}
                   {isRequests && pendingCount > 0 && (
                     <Chip
                       label={pendingCount}
@@ -226,7 +249,7 @@ export default function AdminLayout() {
         <Box
           sx={{
             p: 1.5,
-            borderTop: "0.5px solid #e5e7eb",
+            borderTop: `0.5px solid ${sidebarBdr}`,
             display: "flex",
             alignItems: "center",
             gap: 1,
@@ -236,8 +259,8 @@ export default function AdminLayout() {
             sx={{
               width: 30,
               height: 30,
-              background: "#dbeafe",
-              color: "#1d4ed8",
+              background: isDark ? "#1f2937" : "#dbeafe",
+              color: activeColor,
               fontSize: 12,
               fontWeight: 600,
             }}
@@ -249,7 +272,7 @@ export default function AdminLayout() {
               sx={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#111827",
+                color: textPrimary,
                 lineHeight: 1.3,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -258,7 +281,7 @@ export default function AdminLayout() {
             >
               {user?.username}
             </Typography>
-            <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
+            <Typography sx={{ fontSize: 11, color: textMuted }}>
               {user?.role}
             </Typography>
           </Box>
@@ -266,7 +289,7 @@ export default function AdminLayout() {
             <IconButton
               size="small"
               onClick={() => navigate("/profile")}
-              sx={{ color: "#9ca3af", "&:hover": { color: "#1f6feb" } }}
+              sx={{ color: textMuted, "&:hover": { color: activeColor } }}
             >
               <AccountCircleIcon fontSize="small" />
             </IconButton>
@@ -275,7 +298,7 @@ export default function AdminLayout() {
             <IconButton
               size="small"
               onClick={handleLogout}
-              sx={{ color: "#9ca3af", "&:hover": { color: "#ef4444" } }}
+              sx={{ color: textMuted, "&:hover": { color: "#ef4444" } }}
             >
               <LogoutIcon fontSize="small" />
             </IconButton>
@@ -283,32 +306,56 @@ export default function AdminLayout() {
         </Box>
       </Drawer>
 
-      {/* ── Main area ────────────────────────────────────────────────────── */}
-      <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {/* ── Main area ─────────────────────────────────────────────────────── */}
+      <Box
+        sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
+      >
         {/* Topbar */}
         <AppBar
           position="static"
           elevation={0}
           sx={{
-            background: "#fff",
-            borderBottom: "0.5px solid #e5e7eb",
-            color: "#111827",
+            background: topbarBg,
+            borderBottom: `0.5px solid ${sidebarBdr}`,
+            color: textPrimary,
           }}
         >
           <Toolbar
             variant="dense"
             sx={{ minHeight: 52, px: 3, justifyContent: "space-between" }}
           >
-            <Typography sx={{ fontWeight: 600, fontSize: 15 }}>
+            <Typography
+              sx={{ fontWeight: 600, fontSize: 15, color: textPrimary }}
+            >
               {navItems.find((n) => location.pathname.startsWith(n.path))
                 ?.label || "Dashboard"}
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {/* Live bell badge — navigates to /requests on click */}
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              {/* ── Dark / Light mode toggle ── */}
+              <Tooltip title={isDark ? "Φωτεινό θέμα" : "Σκοτεινό θέμα"}>
+                <IconButton
+                  size="small"
+                  onClick={toggleMode}
+                  sx={{
+                    color: textMuted,
+                    "&:hover": { color: activeColor },
+                    transition: "color 0.2s",
+                  }}
+                >
+                  {isDark ? (
+                    <LightModeIcon fontSize="small" />
+                  ) : (
+                    <DarkModeIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
+
+              {/* Bell */}
               <Tooltip title="Εκκρεμή αιτήματα">
                 <IconButton
                   size="small"
-                  sx={{ color: "#6b7280" }}
+                  sx={{ color: textMuted }}
                   onClick={() => navigate("/requests")}
                 >
                   <Badge
