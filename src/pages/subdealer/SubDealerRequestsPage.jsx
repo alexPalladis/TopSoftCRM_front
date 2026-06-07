@@ -281,15 +281,10 @@ function TicketFormDialog({ open, onClose, onSaved, ticket, currentUser }) {
     const load = async () => {
       try {
         let res;
-        if (form.toType === "NETWORK")
-          res = await networksApi.getAll({ size: 100 });
-        if (form.toType === "DEALER")
-          res = await dealersApi.getAll({ size: 100 });
-        if (form.toType === "SUBDEALER")
-          res = await subdealersApi.getAll({ size: 100 });
-        setOptions(
-          res.data.content.map((e) => ({ value: e.id, label: e.eponymia })),
-        );
+        if (form.toType === "NETWORK") res = await networksApi.getLookup();
+        if (form.toType === "DEALER") res = await dealersApi.getLookup();
+        if (form.toType === "SUBDEALER") res = await subdealersApi.getLookup();
+        setOptions(res.data.map((e) => ({ value: e.id, label: e.eponymia })));
       } catch {}
     };
     load();
