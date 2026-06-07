@@ -69,6 +69,9 @@ const DealerCommissionsPage = lazy(
 const DealerSubDealerFormPage = lazy(
   () => import("./pages/dealer/DealerSubDealerFormPage"),
 );
+const DealerProfilePage = lazy(
+  () => import("./pages/dealer/DealerProfilePage"),
+);
 
 const SubDealerCustomersPage = lazy(
   () => import("./pages/subdealer/SubDealerCustomersPage"),
@@ -139,7 +142,19 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
 
               {/* ── Profile — all roles ── */}
-              <Route path="profile" element={<ProfilePage />} />
+              <Route
+                path="profile"
+                element={
+                  <RolePage
+                    pages={{
+                      ADMIN: ProfilePage,
+                      NETWORK: ProfilePage,
+                      DEALER: DealerProfilePage,
+                      SUBDEALER: DealerProfilePage,
+                    }}
+                  />
+                }
+              />
 
               {/* ── Customers ── */}
               <Route

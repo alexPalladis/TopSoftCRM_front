@@ -9,15 +9,27 @@ import {
   Select,
   FormControl,
   InputLabel,
+  IconButton,
+  Tooltip,
   Stack,
   CircularProgress,
   Alert,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
+import FilterListOffIcon from "@mui/icons-material/FilterListOff";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import { commissionsApi } from "../../services/commissions";
 import { dealersApi } from "../../services/dealers";
 import { productsApi } from "../../services/products";
 import { useAuth } from "../../context/AuthContext";
+
+const PER_PAGE = 20;
+
+function fmt(val) {
+  if (val == null) return "—";
+  return `€${Number(val).toFixed(2)}`;
+}
 
 export default function NetworkCommissionsPage() {
   const { user } = useAuth();
@@ -37,19 +49,17 @@ export default function NetworkCommissionsPage() {
   const [products, setProducts] = useState([]);
   const [dealers, setDealers] = useState([]);
 
-  const PER_PAGE = 20;
-
   useEffect(() => {
     productsApi
       .getAll()
       .then((r) => setProducts(r.data))
       .catch(() => {});
-    // Φόρτωσε μόνο dealers που ανήκουν στο network
+    // Load only dealers that belong to this network
     dealersApi
-      .getAll({ networkId: user?.id, size: 100 })
+      .getAll({ networkId: user?.id, size: 500 })
       .then((r) => setDealers(r.data.content))
       .catch(() => {});
-  }, [user]);
+  }, [user?.id]);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -58,11 +68,11 @@ export default function NetworkCommissionsPage() {
       const params = {
         page,
         size: PER_PAGE,
-        networkId: user?.id, // Εσωτερικό φίλτρο — ΜΟΝΟ του network
         ...(filterDateFrom && { dateFrom: filterDateFrom }),
         ...(filterDateTo && { dateTo: filterDateTo }),
         ...(filterProductId && { productId: filterProductId }),
         ...(filterDealerId && { dealerId: filterDealerId }),
+        // networkId is ignored by backend — always scoped server-side to this network
       };
       const res = await commissionsApi.getHistory(params);
       setRows(res.data.content);
@@ -73,31 +83,21 @@ export default function NetworkCommissionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    filterDateFrom,
-    filterDateTo,
-    filterProductId,
-    filterDealerId,
-    user,
-  ]);
+  }, [page, filterDateFrom, filterDateTo, filterProductId, filterDealerId]);
 
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
 
-  // Σύνολα
-  const totalAmount = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalDealerCommission = rows.reduce(
-    (s, r) => s + Number(r.dealerCommissionAmount || 0),
-    0,
-  );
-  const totalNetworkCommission = rows.reduce(
-    (s, r) => s + Number(r.networkCommissionAmount || 0),
-    0,
-  );
+  const clearFilters = () => {
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterProductId("");
+    setFilterDealerId("");
+    setPage(0);
+  };
 
-  const exportExcel = () => {
+  const exportCsv = () => {
     const header = [
       "Ημερομηνία",
       "Προϊόν",
@@ -109,7 +109,6 @@ export default function NetworkCommissionsPage() {
       "Προμήθεια Network",
       "Πληρώθηκε Dealer",
       "Πληρώθηκε Network",
-      "Παραστατικό",
     ];
     const csvRows = [
       header.join(","),
@@ -125,75 +124,46 @@ export default function NetworkCommissionsPage() {
           r.networkCommissionAmount || 0,
           r.paidDealer ? "Ναι" : "Όχι",
           r.paidNetwork ? "Ναι" : "Όχι",
-          `"${r.receipt || ""}"`,
         ].join(","),
       ),
     ];
-    csvRows.push(
-      [
-        "",
-        "",
-        "",
-        "Σύνολα",
-        totalAmount.toFixed(2),
-        "",
-        totalDealerCommission.toFixed(2),
-        totalNetworkCommission.toFixed(2),
-        "",
-        "",
-        "",
-      ].join(","),
-    );
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], {
       type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "promithies_network.csv";
+    a.download = `promoithies_network_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const clearFilters = () => {
-    setFilterDateFrom("");
-    setFilterDateTo("");
-    setFilterProductId("");
-    setFilterDealerId("");
-    setPage(0);
-  };
+  const totalDealer = rows.reduce(
+    (s, r) => s + (Number(r.dealerCommissionAmount) || 0),
+    0,
+  );
+  const totalNetwork = rows.reduce(
+    (s, r) => s + (Number(r.networkCommissionAmount) || 0),
+    0,
+  );
   const hasFilters =
     filterDateFrom || filterDateTo || filterProductId || filterDealerId;
 
-  const thStyle = {
+  const thSx = {
     padding: "10px 12px",
     textAlign: "left",
     fontSize: 11,
     color: "#9ca3af",
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    letterSpacing: "0.06em",
     fontWeight: 500,
     borderBottom: "0.5px solid #e5e7eb",
     background: "#fafafa",
     whiteSpace: "nowrap",
   };
-  const tdStyle = {
-    padding: "10px 12px",
-    borderBottom: "0.5px solid #f3f4f6",
-    fontSize: 13,
-    color: "#374151",
-  };
-  const tfStyle = {
-    padding: "10px 12px",
-    fontWeight: 700,
-    color: "#111827",
-    background: "#f8f9fb",
-    fontSize: 13,
-  };
 
   return (
     <Box>
-      {/* Header */}
       <Box
         sx={{
           display: "flex",
@@ -202,88 +172,56 @@ export default function NetworkCommissionsPage() {
           mb: 3,
         }}
       >
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
-            Προμήθειες
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές — μόνο του δικτύου σας · Ενημερώνεται αυτόματα από
-            την τιμολογιέρα
-          </Typography>
-        </Box>
+        <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
+          Προμήθειες
+        </Typography>
         <Button
           variant="outlined"
+          size="small"
           startIcon={<DownloadIcon />}
-          onClick={exportExcel}
-          sx={{ borderColor: "#e5e7eb", color: "#374151", borderRadius: 2 }}
+          onClick={exportCsv}
+          disabled={rows.length === 0}
+          sx={{
+            borderColor: "#e5e7eb",
+            color: "#374151",
+            "&:hover": { borderColor: "#9ca3af" },
+          }}
         >
-          ΕΞΑΓΩΓΗ EXCEL
+          Εξαγωγή CSV
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Φίλτρα */}
+      {/* Filters */}
       <Paper
         elevation={0}
-        sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
+        sx={{ p: 2, mb: 2, border: "0.5px solid #e5e7eb", borderRadius: 2 }}
       >
-        <Stack
-          direction="row"
-          spacing={1.5}
-          flexWrap="wrap"
-          alignItems="center"
-          useFlexGap
-        >
+        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
           <TextField
-            size="small"
-            label="Από ημερομηνία"
+            label="Από"
             type="date"
+            size="small"
             value={filterDateFrom}
             onChange={(e) => {
               setFilterDateFrom(e.target.value);
               setPage(0);
             }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: { notched: true },
-            }}
-            sx={{
-              width: 170,
-              "& .MuiOutlinedInput-root": {
-                background: "#fff",
-                color: "#111827",
-                borderRadius: 1.5,
-              },
-            }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 155 }}
           />
           <TextField
-            size="small"
-            label="Έως ημερομηνία"
+            label="Έως"
             type="date"
+            size="small"
             value={filterDateTo}
             onChange={(e) => {
               setFilterDateTo(e.target.value);
               setPage(0);
             }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: { notched: true },
-            }}
-            sx={{
-              width: 170,
-              "& .MuiOutlinedInput-root": {
-                background: "#fff",
-                color: "#111827",
-                borderRadius: 1.5,
-              },
-            }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 155 }}
           />
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Προϊόν</InputLabel>
             <Select
               value={filterProductId}
@@ -292,7 +230,6 @@ export default function NetworkCommissionsPage() {
                 setFilterProductId(e.target.value);
                 setPage(0);
               }}
-              sx={{ borderRadius: 1.5 }}
             >
               <MenuItem value="">Όλα</MenuItem>
               {products.map((p) => (
@@ -302,7 +239,7 @@ export default function NetworkCommissionsPage() {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Dealer</InputLabel>
             <Select
               value={filterDealerId}
@@ -311,7 +248,6 @@ export default function NetworkCommissionsPage() {
                 setFilterDealerId(e.target.value);
                 setPage(0);
               }}
-              sx={{ borderRadius: 1.5 }}
             >
               <MenuItem value="">Όλοι</MenuItem>
               {dealers.map((d) => (
@@ -322,53 +258,53 @@ export default function NetworkCommissionsPage() {
             </Select>
           </FormControl>
           {hasFilters && (
-            <Button
-              size="small"
-              onClick={clearFilters}
-              sx={{ color: "#9ca3af", fontSize: 12 }}
-            >
-              Καθαρισμός ✕
-            </Button>
+            <Tooltip title="Καθαρισμός φίλτρων">
+              <IconButton size="small" onClick={clearFilters}>
+                <FilterListOffIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           )}
         </Stack>
+        <Typography sx={{ fontSize: 12, color: "#6b7280", mt: 1 }}>
+          {total} εγγραφές
+        </Typography>
       </Paper>
 
-      {/* Πίνακας */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 2,
           border: "0.5px solid #e5e7eb",
+          borderRadius: 2,
           overflow: "hidden",
         }}
       >
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={32} />
+          <Box sx={{ p: 4, textAlign: "center" }}>
+            <CircularProgress size={28} />
           </Box>
         ) : (
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={thStyle}>Ημερομηνία</th>
-                  <th style={thStyle}>Προϊόν</th>
-                  <th style={thStyle}>Πελάτης</th>
-                  <th style={thStyle}>ΑΦΜ</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Ποσό</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>
-                    Προμήθεια Dealer
+                  <th style={thSx}>Ημερομηνία</th>
+                  <th style={thSx}>Προϊόν</th>
+                  <th style={thSx}>Πελάτης</th>
+                  <th style={thSx}>ΑΦΜ</th>
+                  <th style={{ ...thSx, textAlign: "right" }}>Ποσό</th>
+                  <th style={thSx}>Dealer</th>
+                  <th style={{ ...thSx, textAlign: "right" }}>Προμ. Dealer</th>
+                  <th style={{ ...thSx, textAlign: "right" }}>Προμ. Network</th>
+                  <th style={{ ...thSx, textAlign: "center" }}>Πληρ. Dealer</th>
+                  <th style={{ ...thSx, textAlign: "center" }}>
+                    Πληρ. Network
                   </th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>
-                    Προμήθεια Network
-                  </th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>
-                    Πληρώθηκε Dealer
-                  </th>
-                  <th style={{ ...thStyle, textAlign: "center" }}>
-                    Πληρώθηκε Network
-                  </th>
-                  <th style={thStyle}>Παραστατικό</th>
                 </tr>
               </thead>
               <tbody>
@@ -377,237 +313,212 @@ export default function NetworkCommissionsPage() {
                     <td
                       colSpan={10}
                       style={{
-                        padding: 40,
+                        padding: 32,
                         textAlign: "center",
                         color: "#9ca3af",
-                        fontSize: 14,
+                        fontSize: 13,
                       }}
                     >
                       Δεν βρέθηκαν εγγραφές
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => (
+                  rows.map((r, idx) => (
                     <tr
                       key={r.id}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
+                      style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}
                     >
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 12,
+                          color: "#6b7280",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {r.paymentDate}
-                      </td>
-                      <td style={{ ...tdStyle, maxWidth: 160 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: 160,
-                          }}
-                        >
-                          {r.productDescription}
-                        </Typography>
                       </td>
                       <td
                         style={{
-                          ...tdStyle,
-                          fontWeight: 500,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {r.productDescription}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
                           color: "#111827",
-                          whiteSpace: "nowrap",
                         }}
                       >
                         {r.customerEponymia}
                       </td>
                       <td
                         style={{
-                          ...tdStyle,
-                          fontFamily: "monospace",
+                          padding: "8px 12px",
                           fontSize: 12,
                           color: "#6b7280",
+                          fontFamily: "monospace",
                         }}
                       >
                         {r.customerAfm}
                       </td>
                       <td
                         style={{
-                          ...tdStyle,
+                          padding: "8px 12px",
+                          fontSize: 13,
                           textAlign: "right",
-                          fontFamily: "monospace",
-                          fontWeight: 600,
-                          color: "#111827",
+                          fontWeight: 500,
                         }}
                       >
-                        €{Number(r.amount).toFixed(2)}
+                        {fmt(r.amount)}
                       </td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        <Typography
-                          sx={{
-                            fontSize: 13,
-                            fontFamily: "monospace",
-                            fontWeight: 600,
-                            color: "#1d4ed8",
-                          }}
-                        >
-                          €{Number(r.dealerCommissionAmount).toFixed(2)}
-                        </Typography>
-                        <Typography sx={{ fontSize: 10, color: "#9ca3af" }}>
-                          {r.dealerName}
-                        </Typography>
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        {r.networkCommissionAmount > 0 ? (
-                          <Typography
-                            sx={{
-                              fontSize: 13,
-                              fontFamily: "monospace",
-                              fontWeight: 600,
-                              color: "#6d28d9",
-                            }}
-                          >
-                            €{Number(r.networkCommissionAmount).toFixed(2)}
-                          </Typography>
-                        ) : (
-                          <span style={{ color: "#d1d5db" }}>—</span>
-                        )}
-                      </td>
-                      {/* Checkboxes — read only για Network */}
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            color: r.paidDealer ? "#16a34a" : "#9ca3af",
-                            fontWeight: r.paidDealer ? 600 : 400,
-                          }}
-                        >
-                          {r.paidDealer ? "✓ Ναι" : "Όχι"}
-                        </Typography>
-                      </td>
-                      <td style={{ ...tdStyle, textAlign: "center" }}>
-                        {r.networkCommissionAmount > 0 ? (
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              color: r.paidNetwork ? "#16a34a" : "#9ca3af",
-                              fontWeight: r.paidNetwork ? 600 : 400,
-                            }}
-                          >
-                            {r.paidNetwork ? "✓ Ναι" : "Όχι"}
-                          </Typography>
-                        ) : (
-                          <span style={{ color: "#d1d5db", fontSize: 12 }}>
-                            —
-                          </span>
-                        )}
-                      </td>
-                      {/* Παραστατικό — read only για Network */}
                       <td
-                        style={{ ...tdStyle, fontSize: 12, color: "#374151" }}
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
                       >
-                        {r.receipt || "—"}
+                        {r.dealerName}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          textAlign: "right",
+                          color: "#16a34a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {fmt(r.dealerCommissionAmount)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          textAlign: "right",
+                          color: "#3b82f6",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {fmt(r.networkCommissionAmount)}
+                      </td>
+                      {/* Read-only icons — network ΜΟΝΟ βλέπει */}
+                      <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                        {r.paidDealer ? (
+                          <CheckCircleIcon
+                            fontSize="small"
+                            sx={{ color: "#16a34a" }}
+                          />
+                        ) : (
+                          <RadioButtonUncheckedIcon
+                            fontSize="small"
+                            sx={{ color: "#d1d5db" }}
+                          />
+                        )}
+                      </td>
+                      <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                        {r.paidNetwork ? (
+                          <CheckCircleIcon
+                            fontSize="small"
+                            sx={{ color: "#3b82f6" }}
+                          />
+                        ) : (
+                          <RadioButtonUncheckedIcon
+                            fontSize="small"
+                            sx={{ color: "#d1d5db" }}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
-
-              {/* Σύνολα */}
               {rows.length > 0 && (
                 <tfoot>
-                  <tr style={{ borderTop: "2px solid #e5e7eb" }}>
+                  <tr
+                    style={{
+                      background: "#f9fafb",
+                      borderTop: "1.5px solid #e5e7eb",
+                    }}
+                  >
                     <td
-                      colSpan={4}
-                      style={{ ...tfStyle, color: "#6b7280", fontSize: 12 }}
+                      colSpan={6}
+                      style={{
+                        padding: "10px 12px",
+                        fontSize: 12,
+                        color: "#6b7280",
+                        fontWeight: 600,
+                      }}
                     >
-                      Σύνολα ({total} εγγραφές)
+                      Σύνολα σελίδας ({rows.length} εγγραφές)
                     </td>
                     <td
                       style={{
-                        ...tfStyle,
+                        padding: "10px 12px",
                         textAlign: "right",
-                        fontFamily: "monospace",
-                        color: "#111827",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#16a34a",
                       }}
                     >
-                      €{totalAmount.toFixed(2)}
+                      {fmt(totalDealer)}
                     </td>
                     <td
                       style={{
-                        ...tfStyle,
+                        padding: "10px 12px",
                         textAlign: "right",
-                        fontFamily: "monospace",
-                        color: "#1d4ed8",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#3b82f6",
                       }}
                     >
-                      €{totalDealerCommission.toFixed(2)}
+                      {fmt(totalNetwork)}
                     </td>
-                    <td
-                      style={{
-                        ...tfStyle,
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        color: "#6d28d9",
-                      }}
-                    >
-                      {totalNetworkCommission > 0
-                        ? `€${totalNetworkCommission.toFixed(2)}`
-                        : "—"}
-                    </td>
-                    <td colSpan={3} style={tfStyle}></td>
+                    <td colSpan={2} />
                   </tr>
                 </tfoot>
               )}
             </table>
           </Box>
         )}
+      </Paper>
 
-        {/* Pagination + info footer */}
+      {totalPages > 1 && (
         <Box
           sx={{
-            px: 2.5,
-            py: 1.5,
-            borderTop: "0.5px solid #e5e7eb",
-            background: "#fafafa",
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "center",
             alignItems: "center",
+            gap: 2,
+            mt: 2,
           }}
         >
-          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-            Μόνο ανάγνωση · Οι εγγραφές ενημερώνονται αυτόματα από την
-            τιμολογιέρα
+          <Button
+            size="small"
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+            sx={{ color: "#374151" }}
+          >
+            ← Προηγούμενη
+          </Button>
+          <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
+            Σελίδα {page + 1} / {totalPages}
           </Typography>
-          <Stack direction="row" spacing={0.5}>
-            {[...Array(totalPages)].map((_, i) => (
-              <Box
-                key={i}
-                onClick={() => setPage(i)}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  fontWeight: page === i ? 600 : 400,
-                  background: page === i ? "#1f6feb" : "transparent",
-                  color: page === i ? "#fff" : "#6b7280",
-                  border: "0.5px solid",
-                  borderColor: page === i ? "#1f6feb" : "#e5e7eb",
-                }}
-              >
-                {i + 1}
-              </Box>
-            ))}
-          </Stack>
+          <Button
+            size="small"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => p + 1)}
+            sx={{ color: "#374151" }}
+          >
+            Επόμενη →
+          </Button>
         </Box>
-      </Paper>
+      )}
     </Box>
   );
 }

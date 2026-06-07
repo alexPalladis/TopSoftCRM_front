@@ -15,4 +15,11 @@ export const commissionsApi = {
   updateReceipt: (id, receipt) =>
     api.patch(`/commissions/history/${id}/receipt`, { receipt }),
   deleteHistory: (id) => api.delete(`/commissions/history/${id}`),
+  exportExcel: (params) =>
+    api.get("/commissions/history/export", { params, responseType: "blob" }),
+};
+
+// Referral code: GET /api/referral-codes/my
+export const referralCodeApi = {
+  getMy: () => api.get("/referral-codes/my"),
 };
