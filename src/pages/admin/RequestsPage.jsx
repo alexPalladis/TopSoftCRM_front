@@ -35,6 +35,7 @@ import { useAuth } from "../../context/AuthContext";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
 import { subdealersApi } from "../../services/subdealers";
+import TablePagination from "../../components/shared/TablePagination";
 
 const PER_PAGE = 10;
 
@@ -854,38 +855,14 @@ export default function RequestsPage() {
         )}
       </Paper>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 2,
-            mt: 2,
-          }}
-        >
-          <Button
-            size="small"
-            disabled={page === 0}
-            onClick={() => setPage((p) => p - 1)}
-            sx={{ color: "#374151" }}
-          >
-            ← Προηγούμενη
-          </Button>
-          <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
-            Σελίδα {page + 1} / {totalPages}
-          </Typography>
-          <Button
-            size="small"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-            sx={{ color: "#374151" }}
-          >
-            Επόμενη →
-          </Button>
-        </Box>
-      )}
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        perPage={PER_PAGE}
+        onPageChange={setPage}
+        standalone
+      />
 
       <TicketViewDialog
         ticket={viewTicket}

@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import FilterListOffIcon from "@mui/icons-material/FilterListOff";
 import api from "../../services/api";
+import TablePagination from "../../components/shared/TablePagination";
 
 const PER_PAGE = 20;
 
@@ -360,43 +361,14 @@ export default function AuditLogPage() {
         )}
       </Paper>
 
-      {totalPages > 1 && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 2,
-            mt: 2,
-          }}
-        >
-          <button
-            disabled={page === 0}
-            onClick={() => setPage((p) => p - 1)}
-            style={{
-              padding: "4px 12px",
-              cursor: page === 0 ? "default" : "pointer",
-              opacity: page === 0 ? 0.4 : 1,
-            }}
-          >
-            ← Προηγούμενη
-          </button>
-          <Typography sx={{ fontSize: 13, color: "#6b7280" }}>
-            Σελίδα {page + 1} / {totalPages}
-          </Typography>
-          <button
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-            style={{
-              padding: "4px 12px",
-              cursor: page >= totalPages - 1 ? "default" : "pointer",
-              opacity: page >= totalPages - 1 ? 0.4 : 1,
-            }}
-          >
-            Επόμενη →
-          </button>
-        </Box>
-      )}
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        perPage={PER_PAGE}
+        onPageChange={setPage}
+        standalone
+      />
     </Box>
   );
 }

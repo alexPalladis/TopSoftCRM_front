@@ -265,7 +265,6 @@ export default function CustomerFormPage() {
       prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)),
     );
   };
-
   const handleSubmit = async () => {
     const errs = validate(form);
     if (Object.keys(errs).length > 0) {
@@ -279,13 +278,38 @@ export default function CustomerFormPage() {
         networkId: form.networkId || null,
         subDealerId: form.subDealerId || null,
       };
+
+      let customerId = id;
+
       if (isEdit) {
         await customersApi.update(id, payload);
       } else {
-        await customersApi.create(payload);
+        const res = await customersApi.create(payload);
+        customerId = res.data.id;
       }
+
+      // ── Save subscriptions ────────────────────────────────────────────────
+      // Upsert every subscription row — backend handles create vs update.
+      // Only send rows that have been touched (active=true or have a cost/date).
+      await Promise.all(
+        subscriptions.map((s) =>
+          customersApi.upsertSubscription(customerId, {
+            productId: s.productId,
+            active: s.active,
+            expiryDate: s.type === "DATE" ? s.expiryDate || null : null,
+            quantity:
+              s.type === "QUANTITY"
+                ? s.quantity != null
+                  ? Number(s.quantity)
+                  : null
+                : null,
+            costOverride: s.cost != null ? Number(s.cost) : null,
+          }),
+        ),
+      );
+
       setSubmitted(true);
-      setTimeout(() => navigate("/customers"), 1500);
+      setTimeout(() => navigate("/customers"), 1000);
     } catch (err) {
       const msg = err.response?.data?.error || "Σφάλμα κατά την αποθήκευση";
       if (
