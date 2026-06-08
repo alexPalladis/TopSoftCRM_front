@@ -45,7 +45,6 @@ const STATUS_OPTIONS = [
 
 const ENTITY_OPTIONS = [
   { value: "NETWORK", label: "Network" },
-  { value: "DEALER", label: "Dealer" },
   { value: "SUBDEALER", label: "SubDealer" },
 ];
 

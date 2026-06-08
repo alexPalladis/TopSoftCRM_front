@@ -58,7 +58,7 @@ export function getNavItems(role) {
       label: "Τιμοκατάλογος",
       path: "/pricelist",
       icon: "LocalOffer",
-      roles: [ROLES.ADMIN, ROLES.NETWORK, ROLES.DEALER, ROLES.SUBDEALER],
+      roles: [ROLES.ADMIN, ROLES.NETWORK, ROLES.DEALER],
     },
 
     // ADMIN only — audit trail

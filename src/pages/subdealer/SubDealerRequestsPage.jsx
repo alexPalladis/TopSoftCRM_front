@@ -43,11 +43,9 @@ const STATUS_OPTIONS = [
   { value: "DONE", label: "Ολοκληρώθηκε" },
 ];
 
-// SubDealer can send requests TO: Network, Dealer, or another SubDealer
 const ENTITY_OPTIONS = [
   { value: "NETWORK", label: "Network" },
   { value: "DEALER", label: "Dealer" },
-  { value: "SUBDEALER", label: "SubDealer" },
 ];
 
 const entityColors = {
@@ -697,7 +695,7 @@ export default function SubDealerRequestsPage() {
             "&:hover": { background: "#1a5fd6" },
           }}
         >
-          Ω
+          NEO AITHMA
         </Button>
       </Box>
 
