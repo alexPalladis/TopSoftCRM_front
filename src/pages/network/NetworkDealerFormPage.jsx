@@ -18,6 +18,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import LockIcon from "@mui/icons-material/Lock";
 import { dealersApi } from "../../services/dealers";
 import { useAuth } from "../../context/AuthContext";
+import { commissionsApi } from "../../services/commissions";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", defaultPrice: 120 },
@@ -146,14 +147,24 @@ export default function NetworkDealerFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [globalError, setGlobalError] = useState("");
   const [taxisLoading, setTaxisLoading] = useState(false);
+  const [commissions, setCommissions] = useState(
+    PRODUCTS.map((p) => ({
+      productId: p.id,
+      description: p.description,
+      percentage: "",
+      salePrice: p.defaultPrice,
+    })),
+  );
 
   useEffect(() => {
     if (!isEdit) return;
     setPageLoading(true);
-    dealersApi
-      .getById(id)
-      .then((res) => {
-        const d = res.data;
+    Promise.all([
+      dealersApi.getById(id),
+      commissionsApi.getByEntity("DEALER", id),
+    ])
+      .then(([dealerRes, commRes]) => {
+        const d = dealerRes.data;
         setForm({
           afm: d.afm || "",
           eponymia: d.eponymia || "",
@@ -170,6 +181,22 @@ export default function NetworkDealerFormPage() {
           password: "",
           passwordConfirm: "",
         });
+        const apiRows = commRes.data.commissions ?? [];
+        setCommissions(
+          PRODUCTS.map((p) => {
+            const found = apiRows.find((c) => c.productId === p.id);
+            return {
+              productId: p.id,
+              description: p.description,
+              percentage:
+                found?.percentage != null ? String(found.percentage) : "",
+              salePrice:
+                found?.salePrice != null
+                  ? String(found.salePrice)
+                  : String(p.defaultPrice),
+            };
+          }),
+        );
       })
       .catch(() => setGlobalError("Σφάλμα φόρτωσης dealer"))
       .finally(() => setPageLoading(false));

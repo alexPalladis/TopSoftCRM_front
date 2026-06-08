@@ -147,10 +147,12 @@ export default function NetworkFormPage() {
   useEffect(() => {
     if (!isEdit) return;
     setPageLoading(true);
-    networksApi
-      .getById(id)
-      .then((res) => {
-        const n = res.data;
+    Promise.all([
+      networksApi.getById(id),
+      commissionsApi.getByEntity("NETWORK", id),
+    ])
+      .then(([networkRes, commRes]) => {
+        const n = networkRes.data;
         setForm({
           afm: n.afm || "",
           eponymia: n.eponymia || "",
@@ -167,6 +169,22 @@ export default function NetworkFormPage() {
           password: "",
           passwordConfirm: "",
         });
+        const apiRows = commRes.data.commissions ?? [];
+        setCommissions(
+          PRODUCTS.map((p) => {
+            const found = apiRows.find((c) => c.productId === p.id);
+            return {
+              productId: p.id,
+              description: p.description,
+              percentage:
+                found?.percentage != null ? String(found.percentage) : "",
+              salePrice:
+                found?.salePrice != null
+                  ? String(found.salePrice)
+                  : String(p.defaultPrice),
+            };
+          }),
+        );
       })
       .catch(() => setGlobalError("Σφάλμα φόρτωσης network"))
       .finally(() => setPageLoading(false));

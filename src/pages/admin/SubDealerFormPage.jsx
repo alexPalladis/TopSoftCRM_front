@@ -19,6 +19,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
 import { subdealersApi } from "../../services/subdealers";
 import { dealersApi } from "../../services/dealers";
+import { commissionsApi } from "../../services/commissions";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", defaultPrice: 120 },
@@ -158,10 +159,12 @@ export default function SubDealerFormPage() {
   useEffect(() => {
     if (!isEdit) return;
     setPageLoading(true);
-    subdealersApi
-      .getById(id)
-      .then((res) => {
-        const s = res.data;
+    Promise.all([
+      subdealersApi.getById(id),
+      commissionsApi.getByEntity("SUBDEALER", id),
+    ])
+      .then(([subRes, commRes]) => {
+        const s = subRes.data;
         setForm({
           afm: s.afm || "",
           eponymia: s.eponymia || "",
@@ -179,6 +182,22 @@ export default function SubDealerFormPage() {
           password: "",
           passwordConfirm: "",
         });
+        const apiRows = commRes.data.commissions ?? [];
+        setCommissions(
+          PRODUCTS.map((p) => {
+            const found = apiRows.find((c) => c.productId === p.id);
+            return {
+              productId: p.id,
+              description: p.description,
+              percentage:
+                found?.percentage != null ? String(found.percentage) : "",
+              salePrice:
+                found?.salePrice != null
+                  ? String(found.salePrice)
+                  : String(p.defaultPrice),
+            };
+          }),
+        );
       })
       .catch(() => setGlobalError("Σφάλμα φόρτωσης sub-dealer"))
       .finally(() => setPageLoading(false));

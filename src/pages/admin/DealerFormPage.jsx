@@ -19,6 +19,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
 import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
+import { commissionsApi } from "../../services/commissions";
 
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", defaultPrice: 120 },
@@ -157,10 +158,12 @@ export default function DealerFormPage() {
   useEffect(() => {
     if (!isEdit) return;
     setPageLoading(true);
-    dealersApi
-      .getById(id)
-      .then((res) => {
-        const d = res.data;
+    Promise.all([
+      dealersApi.getById(id),
+      commissionsApi.getByEntity("DEALER", id),
+    ])
+      .then(([dealerRes, commRes]) => {
+        const d = dealerRes.data;
         setForm({
           afm: d.afm || "",
           eponymia: d.eponymia || "",
@@ -178,6 +181,22 @@ export default function DealerFormPage() {
           password: "",
           passwordConfirm: "",
         });
+        const apiRows = commRes.data.commissions ?? [];
+        setCommissions(
+          PRODUCTS.map((p) => {
+            const found = apiRows.find((c) => c.productId === p.id);
+            return {
+              productId: p.id,
+              description: p.description,
+              percentage:
+                found?.percentage != null ? String(found.percentage) : "",
+              salePrice:
+                found?.salePrice != null
+                  ? String(found.salePrice)
+                  : String(p.defaultPrice),
+            };
+          }),
+        );
       })
       .catch(() => setGlobalError("Σφάλμα φόρτωσης dealer"))
       .finally(() => setPageLoading(false));
