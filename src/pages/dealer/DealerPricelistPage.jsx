@@ -250,21 +250,6 @@ export default function DealerPricelistPage() {
             </table>
           </Box>
         )}
-
-        {/* Footer note */}
-        <Box
-          sx={{
-            px: 2.5,
-            py: 1.2,
-            background: "#fafafa",
-            borderTop: "0.5px solid #e5e7eb",
-          }}
-        >
-          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-            Ορίζεται από τον Admin ή το Network σας · Δεν επιτρέπεται
-            τροποποίηση
-          </Typography>
-        </Box>
       </Paper>
     </Box>
   );

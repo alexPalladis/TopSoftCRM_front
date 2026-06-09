@@ -24,6 +24,7 @@ import { productsApi } from "../../services/products";
 import TablePagination from "../../components/shared/TablePagination";
 
 const PER_PAGE = 20;
+
 function fmt(val) {
   return val == null ? "—" : `€${Number(val).toFixed(2)}`;
 }
@@ -81,6 +82,7 @@ export default function DealerCommissionsPage() {
     setPage(0);
   };
 
+  // ── CSV export — περιλαμβάνει Παραστατικό (read-only για dealer) ───────────
   const exportCsv = () => {
     const header = [
       "Ημερομηνία",
@@ -90,6 +92,7 @@ export default function DealerCommissionsPage() {
       "Ποσό",
       "Προμήθεια Dealer",
       "Πληρώθηκε",
+      "Παραστατικό",
     ];
     const csvRows = [
       header.join(","),
@@ -102,6 +105,7 @@ export default function DealerCommissionsPage() {
           r.amount,
           r.dealerCommissionAmount,
           r.paidDealer ? "Ναι" : "Όχι",
+          `"${r.receipt || ""}"`,
         ].join(","),
       ),
     ];
@@ -111,7 +115,7 @@ export default function DealerCommissionsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `promoithies_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `promoithies_dealer_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -137,6 +141,7 @@ export default function DealerCommissionsPage() {
 
   return (
     <Box>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <Box
         sx={{
           display: "flex",
@@ -154,7 +159,11 @@ export default function DealerCommissionsPage() {
           startIcon={<DownloadIcon />}
           onClick={exportCsv}
           disabled={rows.length === 0}
-          sx={{ borderColor: "#e5e7eb", color: "#374151" }}
+          sx={{
+            borderColor: "#e5e7eb",
+            color: "#374151",
+            "&:hover": { borderColor: "#9ca3af" },
+          }}
         >
           Εξαγωγή CSV
         </Button>
@@ -162,35 +171,56 @@ export default function DealerCommissionsPage() {
 
       <Paper
         elevation={0}
-        sx={{ p: 2, mb: 2, border: "0.5px solid #e5e7eb", borderRadius: 2 }}
+        sx={{
+          borderRadius: 2,
+          border: "0.5px solid #e5e7eb",
+          overflow: "hidden",
+        }}
       >
-        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        {/* ── Filters ──────────────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: "0.5px solid #e5e7eb",
+            display: "flex",
+            gap: 1.5,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <TextField
-            label="Από"
-            type="date"
             size="small"
+            type="date"
+            label="Από"
             value={filterDateFrom}
             onChange={(e) => {
               setFilterDateFrom(e.target.value);
               setPage(0);
             }}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 155 }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              input: { notched: true },
+            }}
+            sx={{ width: 150, "& .MuiInputBase-root": { fontSize: 13 } }}
           />
           <TextField
-            label="Έως"
-            type="date"
             size="small"
+            type="date"
+            label="Έως"
             value={filterDateTo}
             onChange={(e) => {
               setFilterDateTo(e.target.value);
               setPage(0);
             }}
-            InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 155 }}
+            slotProps={{
+              inputLabel: { shrink: true },
+              input: { notched: true },
+            }}
+            sx={{ width: 150, "& .MuiInputBase-root": { fontSize: 13 } }}
           />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Προϊόν</InputLabel>
+          <FormControl size="small" sx={{ width: 170 }}>
+            <InputLabel sx={{ fontSize: 13 }}>Προϊόν</InputLabel>
             <Select
               value={filterProductId}
               label="Προϊόν"
@@ -198,6 +228,7 @@ export default function DealerCommissionsPage() {
                 setFilterProductId(e.target.value);
                 setPage(0);
               }}
+              sx={{ fontSize: 13 }}
             >
               <MenuItem value="">Όλα</MenuItem>
               {products.map((p) => (
@@ -208,36 +239,27 @@ export default function DealerCommissionsPage() {
             </Select>
           </FormControl>
           {hasFilters && (
-            <Tooltip title="Καθαρισμός">
-              <IconButton size="small" onClick={clearFilters}>
+            <Tooltip title="Καθαρισμός φίλτρων">
+              <IconButton
+                size="small"
+                onClick={clearFilters}
+                sx={{ color: "#9ca3af" }}
+              >
                 <FilterListOffIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
-        </Stack>
-        <Typography sx={{ fontSize: 12, color: "#6b7280", mt: 1 }}>
-          {total} εγγραφές
-        </Typography>
-      </Paper>
+        </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper
-        elevation={0}
-        sx={{
-          border: "0.5px solid #e5e7eb",
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
+        {/* ── Table ────────────────────────────────────────────────────────── */}
         {loading ? (
           <Box sx={{ p: 4, textAlign: "center" }}>
             <CircularProgress size={28} />
           </Box>
+        ) : error ? (
+          <Alert severity="error" sx={{ m: 2 }}>
+            {error}
+          </Alert>
         ) : (
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -250,13 +272,15 @@ export default function DealerCommissionsPage() {
                   <th style={{ ...thSx, textAlign: "right" }}>Ποσό</th>
                   <th style={{ ...thSx, textAlign: "right" }}>Προμήθεια</th>
                   <th style={{ ...thSx, textAlign: "center" }}>Πληρώθηκε</th>
+                  {/* ── ΝΕΑ ΣΤΗΛΗ ── */}
+                  <th style={thSx}>Παραστατικό</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       style={{
                         padding: 32,
                         textAlign: "center",
@@ -305,8 +329,8 @@ export default function DealerCommissionsPage() {
                         style={{
                           padding: "8px 12px",
                           fontSize: 12,
-                          fontFamily: "monospace",
                           color: "#6b7280",
+                          fontFamily: "monospace",
                         }}
                       >
                         {r.customerAfm}
@@ -332,6 +356,7 @@ export default function DealerCommissionsPage() {
                       >
                         {fmt(r.dealerCommissionAmount)}
                       </td>
+                      {/* Πληρώθηκε — read-only για Dealer */}
                       <td style={{ padding: "8px 12px", textAlign: "center" }}>
                         {r.paidDealer ? (
                           <CheckCircleIcon
@@ -345,10 +370,42 @@ export default function DealerCommissionsPage() {
                           />
                         )}
                       </td>
+                      {/* ── Παραστατικό — read-only για Dealer, ορίζεται από Admin ── */}
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                          maxWidth: 160,
+                        }}
+                      >
+                        {r.receipt ? (
+                          <Tooltip title={r.receipt}>
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                color: "#374151",
+                                maxWidth: 140,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                cursor: "default",
+                              }}
+                            >
+                              {r.receipt}
+                            </Typography>
+                          </Tooltip>
+                        ) : (
+                          <Typography sx={{ fontSize: 12, color: "#d1d5db" }}>
+                            —
+                          </Typography>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
+              {/* Totals footer */}
               {rows.length > 0 && (
                 <tfoot>
                   <tr
@@ -379,7 +436,7 @@ export default function DealerCommissionsPage() {
                     >
                       {fmt(totalDealer)}
                     </td>
-                    <td />
+                    <td colSpan={2} />
                   </tr>
                 </tfoot>
               )}

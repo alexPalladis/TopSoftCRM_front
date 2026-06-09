@@ -32,10 +32,12 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
+import SearchIcon from "@mui/icons-material/Search";
 import { useAuth } from "../../context/AuthContext";
 import { useThemeMode } from "../../context/ThemeContext";
 import { getNavItems } from "../../utils/roleUtils";
 import { ticketsApi } from "../../services/tickets";
+import GlobalSearch from "./GlobalSearch";
 
 const SIDEBAR_WIDTH = 230;
 
@@ -68,6 +70,8 @@ export default function AdminLayout() {
   const isDark = mode === "dark";
 
   const [pendingCount, setPendingCount] = useState(0);
+  // ── Search state lives HERE — single source of truth ──────────────────────
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const fetchPending = async () => {
@@ -102,11 +106,20 @@ export default function AdminLayout() {
   const activeColor = isDark ? "#58a6ff" : "#1d4ed8";
   const roleBadgeBg = isDark ? "#1f2937" : "#eff6ff";
   const roleBadgeBdr = isDark ? "#30363d" : "#bfdbfe";
+  const searchBtnBg = isDark ? "#1c2128" : "#f3f4f6";
+  const searchBtnBdr = isDark ? "#30363d" : "#e5e7eb";
 
   return (
     <Box
       sx={{ display: "flex", minHeight: "100vh", background: pageContentBg }}
     >
+      {/* GlobalSearch — controlled by searchOpen state */}
+      <GlobalSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpenRequest={() => setSearchOpen(true)}
+      />
+
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       <Drawer
         variant="permanent"
@@ -310,7 +323,6 @@ export default function AdminLayout() {
       <Box
         sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
       >
-        {/* Topbar */}
         <AppBar
           position="static"
           elevation={0}
@@ -331,8 +343,64 @@ export default function AdminLayout() {
                 ?.label || "Dashboard"}
             </Typography>
 
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              {/* ── Dark / Light mode toggle ── */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {/* Search trigger button */}
+              <Tooltip title="Αναζήτηση (Ctrl+K)">
+                <Box
+                  onClick={() => setSearchOpen(true)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setSearchOpen(true);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    px: 1.5,
+                    py: 0.6,
+                    cursor: "pointer",
+                    borderRadius: 1.5,
+                    background: searchBtnBg,
+                    border: `0.5px solid ${searchBtnBdr}`,
+                    transition: "border-color 0.15s",
+                    "&:hover": { borderColor: activeColor },
+                    userSelect: "none",
+                  }}
+                >
+                  <SearchIcon sx={{ fontSize: 14, color: textMuted }} />
+                  <Typography sx={{ fontSize: 12, color: textMuted }}>
+                    Αναζήτηση...
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.3,
+                      ml: 0.5,
+                    }}
+                  >
+                    {["Ctrl", "K"].map((k) => (
+                      <Box
+                        key={k}
+                        sx={{
+                          border: `0.5px solid ${sidebarBdr}`,
+                          borderRadius: 0.8,
+                          px: 0.6,
+                          fontSize: 10,
+                          color: textMuted,
+                          fontFamily: "monospace",
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {k}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </Tooltip>
+
+              {/* Dark / Light toggle */}
               <Tooltip title={isDark ? "Φωτεινό θέμα" : "Σκοτεινό θέμα"}>
                 <IconButton
                   size="small"

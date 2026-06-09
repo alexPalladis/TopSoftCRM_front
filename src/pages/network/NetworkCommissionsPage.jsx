@@ -55,7 +55,7 @@ export default function NetworkCommissionsPage() {
       .getAll()
       .then((r) => setProducts(r.data))
       .catch(() => {});
-    // Load only dealers that belong to this network
+    // Φόρτωσε μόνο dealers που ανήκουν σε αυτό το network
     dealersApi
       .getAll({ networkId: user?.id, size: 500 })
       .then((r) => setDealers(r.data.content))
@@ -73,7 +73,7 @@ export default function NetworkCommissionsPage() {
         ...(filterDateTo && { dateTo: filterDateTo }),
         ...(filterProductId && { productId: filterProductId }),
         ...(filterDealerId && { dealerId: filterDealerId }),
-        // networkId is ignored by backend — always scoped server-side to this network
+        // networkId αγνοείται από το backend — scoped server-side αυτόματα
       };
       const res = await commissionsApi.getHistory(params);
       setRows(res.data.content);
@@ -98,6 +98,7 @@ export default function NetworkCommissionsPage() {
     setPage(0);
   };
 
+  // ── CSV export — περιλαμβάνει Παραστατικό (read-only για network) ──────────
   const exportCsv = () => {
     const header = [
       "Ημερομηνία",
@@ -110,6 +111,7 @@ export default function NetworkCommissionsPage() {
       "Προμήθεια Network",
       "Πληρώθηκε Dealer",
       "Πληρώθηκε Network",
+      "Παραστατικό",
     ];
     const csvRows = [
       header.join(","),
@@ -125,6 +127,7 @@ export default function NetworkCommissionsPage() {
           r.networkCommissionAmount || 0,
           r.paidDealer ? "Ναι" : "Όχι",
           r.paidNetwork ? "Ναι" : "Όχι",
+          `"${r.receipt || ""}"`,
         ].join(","),
       ),
     ];
@@ -165,6 +168,7 @@ export default function NetworkCommissionsPage() {
 
   return (
     <Box>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <Box
         sx={{
           display: "flex",
@@ -192,38 +196,52 @@ export default function NetworkCommissionsPage() {
         </Button>
       </Box>
 
-      {/* Filters */}
       <Paper
         elevation={0}
-        sx={{ p: 2, mb: 2, border: "0.5px solid #e5e7eb", borderRadius: 2 }}
+        sx={{
+          borderRadius: 2,
+          border: "0.5px solid #e5e7eb",
+          overflow: "hidden",
+        }}
       >
-        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        {/* ── Filters ──────────────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: "0.5px solid #e5e7eb",
+            display: "flex",
+            gap: 1.5,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <TextField
-            label="Από"
-            type="date"
             size="small"
+            type="date"
+            label="Από"
             value={filterDateFrom}
             onChange={(e) => {
               setFilterDateFrom(e.target.value);
               setPage(0);
             }}
             InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 155 }}
+            sx={{ width: 150, "& .MuiInputBase-root": { fontSize: 13 } }}
           />
           <TextField
-            label="Έως"
-            type="date"
             size="small"
+            type="date"
+            label="Έως"
             value={filterDateTo}
             onChange={(e) => {
               setFilterDateTo(e.target.value);
               setPage(0);
             }}
             InputLabelProps={{ shrink: true }}
-            sx={{ minWidth: 155 }}
+            sx={{ width: 150, "& .MuiInputBase-root": { fontSize: 13 } }}
           />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel>Προϊόν</InputLabel>
+          <FormControl size="small" sx={{ width: 170 }}>
+            <InputLabel sx={{ fontSize: 13 }}>Προϊόν</InputLabel>
             <Select
               value={filterProductId}
               label="Προϊόν"
@@ -231,6 +249,7 @@ export default function NetworkCommissionsPage() {
                 setFilterProductId(e.target.value);
                 setPage(0);
               }}
+              sx={{ fontSize: 13 }}
             >
               <MenuItem value="">Όλα</MenuItem>
               {products.map((p) => (
@@ -240,8 +259,8 @@ export default function NetworkCommissionsPage() {
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Dealer</InputLabel>
+          <FormControl size="small" sx={{ width: 200 }}>
+            <InputLabel sx={{ fontSize: 13 }}>Dealer</InputLabel>
             <Select
               value={filterDealerId}
               label="Dealer"
@@ -249,6 +268,7 @@ export default function NetworkCommissionsPage() {
                 setFilterDealerId(e.target.value);
                 setPage(0);
               }}
+              sx={{ fontSize: 13 }}
             >
               <MenuItem value="">Όλοι</MenuItem>
               {dealers.map((d) => (
@@ -260,35 +280,26 @@ export default function NetworkCommissionsPage() {
           </FormControl>
           {hasFilters && (
             <Tooltip title="Καθαρισμός φίλτρων">
-              <IconButton size="small" onClick={clearFilters}>
+              <IconButton
+                size="small"
+                onClick={clearFilters}
+                sx={{ color: "#9ca3af" }}
+              >
                 <FilterListOffIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
-        </Stack>
-        <Typography sx={{ fontSize: 12, color: "#6b7280", mt: 1 }}>
-          {total} εγγραφές
-        </Typography>
-      </Paper>
+        </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <Paper
-        elevation={0}
-        sx={{
-          border: "0.5px solid #e5e7eb",
-          borderRadius: 2,
-          overflow: "hidden",
-        }}
-      >
+        {/* ── Table ────────────────────────────────────────────────────────── */}
         {loading ? (
           <Box sx={{ p: 4, textAlign: "center" }}>
             <CircularProgress size={28} />
           </Box>
+        ) : error ? (
+          <Alert severity="error" sx={{ m: 2 }}>
+            {error}
+          </Alert>
         ) : (
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -306,13 +317,15 @@ export default function NetworkCommissionsPage() {
                   <th style={{ ...thSx, textAlign: "center" }}>
                     Πληρ. Network
                   </th>
+                  {/* ── ΝΕΕΣ ΣΤΗΛΕΣ ── */}
+                  <th style={thSx}>Παραστατικό</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       style={{
                         padding: 32,
                         textAlign: "center",
@@ -408,7 +421,7 @@ export default function NetworkCommissionsPage() {
                       >
                         {fmt(r.networkCommissionAmount)}
                       </td>
-                      {/* Read-only icons — network ΜΟΝΟ βλέπει */}
+                      {/* Πληρώθηκε Dealer — read-only για Network */}
                       <td style={{ padding: "8px 12px", textAlign: "center" }}>
                         {r.paidDealer ? (
                           <CheckCircleIcon
@@ -422,6 +435,7 @@ export default function NetworkCommissionsPage() {
                           />
                         )}
                       </td>
+                      {/* Πληρώθηκε Network — read-only για Network */}
                       <td style={{ padding: "8px 12px", textAlign: "center" }}>
                         {r.paidNetwork ? (
                           <CheckCircleIcon
@@ -435,10 +449,42 @@ export default function NetworkCommissionsPage() {
                           />
                         )}
                       </td>
+                      {/* ── Παραστατικό — read-only για Network, ορίζεται από Admin ── */}
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                          maxWidth: 160,
+                        }}
+                      >
+                        {r.receipt ? (
+                          <Tooltip title={r.receipt}>
+                            <Typography
+                              sx={{
+                                fontSize: 12,
+                                color: "#374151",
+                                maxWidth: 140,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                cursor: "default",
+                              }}
+                            >
+                              {r.receipt}
+                            </Typography>
+                          </Tooltip>
+                        ) : (
+                          <Typography sx={{ fontSize: 12, color: "#d1d5db" }}>
+                            —
+                          </Typography>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
+              {/* Totals footer */}
               {rows.length > 0 && (
                 <tfoot>
                   <tr
@@ -480,7 +526,7 @@ export default function NetworkCommissionsPage() {
                     >
                       {fmt(totalNetwork)}
                     </td>
-                    <td colSpan={2} />
+                    <td colSpan={3} />
                   </tr>
                 </tfoot>
               )}

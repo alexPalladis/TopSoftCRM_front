@@ -178,19 +178,6 @@ function ReadOnlyTable({ title, color, data, loading }) {
           </table>
         </Box>
       )}
-
-      <Box
-        sx={{
-          px: 2.5,
-          py: 1.2,
-          background: "#fafafa",
-          borderTop: "0.5px solid #e5e7eb",
-        }}
-      >
-        <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-          Ορίζεται από τον Admin · Δεν επιτρέπεται τροποποίηση
-        </Typography>
-      </Box>
     </Paper>
   );
 }

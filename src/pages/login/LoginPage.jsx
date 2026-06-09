@@ -17,17 +17,32 @@ import { getRoleFromId } from "../../utils/roleUtils";
 const darkField = {
   "& .MuiOutlinedInput-root": {
     color: "#e6edf3",
+    backgroundColor: "#161b22", // ← add this
     "& fieldset": { borderColor: "#30363d" },
     "&:hover fieldset": { borderColor: "#6e7681" },
     "&.Mui-focused fieldset": { borderColor: "#1f6feb" },
     "&.Mui-error fieldset": { borderColor: "#f85149" },
+    // ── Kill browser autofill blue/yellow flash ──
+    "& input:-webkit-autofill": {
+      WebkitBoxShadow: "0 0 0 100px #161b22 inset",
+      WebkitTextFillColor: "#e6edf3",
+      caretColor: "#e6edf3",
+      borderRadius: "inherit",
+    },
+    "& input:-webkit-autofill:focus": {
+      WebkitBoxShadow: "0 0 0 100px #161b22 inset",
+      WebkitTextFillColor: "#e6edf3",
+    },
+    "& input:-webkit-autofill:hover": {
+      WebkitBoxShadow: "0 0 0 100px #161b22 inset",
+      WebkitTextFillColor: "#e6edf3",
+    },
   },
   "& .MuiInputLabel-root": { color: "#7d8590" },
   "& .MuiInputLabel-root.Mui-focused": { color: "#1f6feb" },
   "& .MuiInputLabel-root.Mui-error": { color: "#f85149" },
   "& .MuiFormHelperText-root": { color: "#f85149", marginLeft: 0 },
 };
-
 function validate(form) {
   const errors = {};
   if (!form.username.trim()) errors.username = "Το username είναι υποχρεωτικό";

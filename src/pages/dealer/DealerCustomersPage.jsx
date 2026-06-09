@@ -31,7 +31,9 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import { customersApi } from "../../services/customers";
 import { useAuth } from "../../context/AuthContext";
 import ReassignSubDealerDialog from "../../components/shared/ReassignSubDealerDialog";
+import TablePagination from "../../components/shared/TablePagination";
 
+// ── Product catalogue (must stay in sync with backend Product table) ──────────
 const PRODUCTS = [
   { id: 1, description: "Συνδρομή εφαρμογής", type: "DATE" },
   { id: 2, description: "Ενεργός Πάροχος ΗΤ", type: "DATE" },
@@ -45,6 +47,7 @@ const PRODUCTS = [
 
 const PER_PAGE = 10;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ display: "flex", py: 0.8, borderBottom: "0.5px solid #f3f4f6" }}>
@@ -60,18 +63,59 @@ function DetailRow({ label, value }) {
   );
 }
 
+// ─── Customer Detail Dialog ────────────────────────────────────────────────────
+// Fetches REAL subscription data from the API every time a customer is opened.
+// Read-only — dealer cannot edit anything.
 function CustomerViewDialog({ customer, open, onClose }) {
-  if (!customer) return null;
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loadingSubs, setLoadingSubs] = useState(false);
 
-  const subscriptions = PRODUCTS.map((p, i) => ({
-    productId: p.id,
-    description: p.description,
-    type: p.type,
-    active: [0, 1, 3, 5].includes(i),
-    expiryDate: [0, 1, 3].includes(i) ? "2026-12-31" : "",
-    quantity: i === 5 ? 300 : i === 6 ? 500 : null,
-    cost: [120, 100, 50, 100, 200, 30, 20, 50][i],
-  }));
+  useEffect(() => {
+    if (!open || !customer?.id) return;
+
+    const fetchSubs = async () => {
+      setLoadingSubs(true);
+      try {
+        const res = await customersApi.getSubscriptions(customer.id);
+        const apiSubs = res.data ?? [];
+
+        // Merge with full PRODUCTS list so every product row always appears,
+        // even if it has never been activated (active=false, cost=default).
+        const merged = PRODUCTS.map((p) => {
+          const found = apiSubs.find((s) => s.productId === p.id);
+          return {
+            productId: p.id,
+            description: p.description,
+            type: p.type,
+            active: found?.active ?? false,
+            expiryDate: found?.expiryDate ?? "",
+            quantity: found?.quantity ?? null,
+            cost: found?.cost ?? "—",
+          };
+        });
+        setSubscriptions(merged);
+      } catch {
+        // Silently fall back to empty — subscriptions are supplementary info
+        setSubscriptions(
+          PRODUCTS.map((p) => ({
+            productId: p.id,
+            description: p.description,
+            type: p.type,
+            active: false,
+            expiryDate: "",
+            quantity: null,
+            cost: "—",
+          })),
+        );
+      } finally {
+        setLoadingSubs(false);
+      }
+    };
+
+    fetchSubs();
+  }, [open, customer?.id]);
+
+  if (!customer) return null;
 
   return (
     <Dialog
@@ -86,7 +130,7 @@ function CustomerViewDialog({ customer, open, onClose }) {
           pb: 1,
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
         }}
       >
         <Box>
@@ -106,16 +150,18 @@ function CustomerViewDialog({ customer, open, onClose }) {
             sx={{
               background: customer.active ? "#dcfce7" : "#fee2e2",
               color: customer.active ? "#166534" : "#991b1b",
+              fontSize: 11,
             }}
           />
-          <IconButton size="small" onClick={onClose}>
+          <IconButton size="small" onClick={onClose} sx={{ color: "#9ca3af" }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
       </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ pt: 2 }}>
+
+      <DialogContent sx={{ pt: 3 }}>
         <Grid container spacing={3}>
+          {/* Left: identity */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{
@@ -127,25 +173,19 @@ function CustomerViewDialog({ customer, open, onClose }) {
                 mb: 1,
               }}
             >
-              Στοιχεία επιχείρησης
+              Στοιχεία
             </Typography>
-            <DetailRow label="ID" value={customer.id} />
-            <DetailRow label="ΑΦΜ" value={customer.afm} />
             <DetailRow label="Επωνυμία" value={customer.eponymia} />
             <DetailRow
-              label="Νόμιμος εκπρόσωπος"
+              label="Νόμιμος Εκπρόσωπος"
               value={customer.nomimosEkprosopos}
             />
             <DetailRow label="Επάγγελμα" value={customer.epaggelma} />
             <DetailRow label="Δ.Ο.Υ." value={customer.doy} />
-            <DetailRow label="Διεύθυνση" value={customer.address} />
-            <DetailRow label="Πόλη" value={customer.city} />
-            <DetailRow label="Τ.Κ." value={customer.tk} />
-            <DetailRow label="Τηλέφωνο σταθερό" value={customer.phoneFixed} />
-            <DetailRow label="Τηλέφωνο κινητό" value={customer.phoneMobile} />
-            <DetailRow label="Email" value={customer.email} />
             <DetailRow label="Sub-dealer" value={customer.subDealerName} />
           </Grid>
+
+          {/* Right: contact */}
           <Grid item xs={12} md={6}>
             <Typography
               sx={{
@@ -157,13 +197,46 @@ function CustomerViewDialog({ customer, open, onClose }) {
                 mb: 1,
               }}
             >
+              Επικοινωνία
+            </Typography>
+            <DetailRow label="Διεύθυνση" value={customer.address} />
+            <DetailRow label="Πόλη" value={customer.city} />
+            <DetailRow label="Τ.Κ." value={customer.tk} />
+            <DetailRow label="Σταθερό" value={customer.phoneFixed} />
+            <DetailRow label="Κινητό" value={customer.phoneMobile} />
+            <DetailRow label="Email" value={customer.email} />
+          </Grid>
+
+          {/* Subscriptions — real data from API */}
+          <Grid item xs={12}>
+            <Divider sx={{ mb: 1.5 }} />
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#6b7280",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                mb: 1.5,
+              }}
+            >
               Ενεργοποιημένα Προϊόντα
             </Typography>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {["Περιγραφή", "Ενεργό", "Λήξη / Ποσότητα", "Κόστος"].map(
-                    (h) => (
+
+            {loadingSubs ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                <CircularProgress size={22} />
+              </Box>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#fafafa" }}>
+                    {[
+                      "Περιγραφή",
+                      "Ενεργό",
+                      "Ημ. Λήξης / Ποσότητα",
+                      "Κόστος",
+                    ].map((h) => (
                       <th
                         key={h}
                         style={{
@@ -171,84 +244,79 @@ function CustomerViewDialog({ customer, open, onClose }) {
                           textAlign: "left",
                           fontSize: 11,
                           color: "#9ca3af",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
                           fontWeight: 500,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
                           borderBottom: "0.5px solid #e5e7eb",
-                          background: "#fafafa",
                         }}
                       >
                         {h}
                       </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {subscriptions.map((s, i) => (
-                  <tr
-                    key={s.productId}
-                    style={{
-                      borderBottom:
-                        i < subscriptions.length - 1
-                          ? "0.5px solid #f3f4f6"
-                          : "none",
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {s.description}
-                    </td>
-                    <td style={{ padding: "8px 12px" }}>
-                      <Chip
-                        label={s.active ? "Ναι" : "Όχι"}
-                        size="small"
-                        sx={{
-                          fontSize: 10,
-                          height: 20,
-                          background: s.active ? "#dcfce7" : "#f3f4f6",
-                          color: s.active ? "#166534" : "#6b7280",
-                        }}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {s.type === "DATE"
-                        ? s.expiryDate
-                          ? new Date(s.expiryDate).toLocaleDateString("el-GR")
-                          : "—"
-                        : s.quantity
-                          ? `${s.quantity}`
-                          : "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        fontFamily: "monospace",
-                        fontWeight: 600,
-                        color: "#111827",
-                      }}
-                    >
-                      €{s.cost}
-                    </td>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {subscriptions.map((s) => (
+                    <tr
+                      key={s.productId}
+                      style={{ borderBottom: "0.5px solid #f3f4f6" }}
+                    >
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {s.description}
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        <Chip
+                          label={s.active ? "Ναι" : "Όχι"}
+                          size="small"
+                          sx={{
+                            fontSize: 10,
+                            height: 20,
+                            background: s.active ? "#dcfce7" : "#f3f4f6",
+                            color: s.active ? "#166534" : "#6b7280",
+                          }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {s.type === "DATE"
+                          ? s.expiryDate
+                            ? new Date(s.expiryDate).toLocaleDateString("el-GR")
+                            : "—"
+                          : s.quantity != null
+                            ? `${s.quantity}`
+                            : "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        {s.cost !== "—" ? `€${Number(s.cost).toFixed(2)}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Grid>
         </Grid>
       </DialogContent>
+
       <DialogActions sx={{ px: 3, py: 2, borderTop: "0.5px solid #e5e7eb" }}>
         <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
           Κλείσιμο
@@ -258,6 +326,7 @@ function CustomerViewDialog({ customer, open, onClose }) {
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DealerCustomersPage() {
   const { user } = useAuth();
 
@@ -270,14 +339,17 @@ export default function DealerCustomersPage() {
   const [filterCity, setFilterCity] = useState("");
   const [filterActive, setFilterActive] = useState("");
   const [page, setPage] = useState(0);
+
+  // ── View dialog ─────────────────────────────────────────────────────────────
   const [selected, setSelected] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // ── Reassign state ─────────────────────────────────────────────────────────
+  // ── Reassign dialog ─────────────────────────────────────────────────────────
   const [reassignTarget, setReassignTarget] = useState(null);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [successSnack, setSuccessSnack] = useState(false);
 
+  // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -285,21 +357,21 @@ export default function DealerCustomersPage() {
       const params = {
         page,
         size: PER_PAGE,
-        dealerId: user?.id,
+        dealerId: user?.id, // backend enforces this scope server-side too
         ...(search && { search }),
         ...(filterCity && { city: filterCity }),
-        ...(filterActive !== "" && { active: filterActive }),
+        ...(filterActive !== "" && { active: filterActive === "true" }),
       };
       const res = await customersApi.getAll(params);
-      setCustomers(res.data.content);
-      setTotal(res.data.totalElements);
-      setTotalPages(res.data.totalPages);
+      setCustomers(res.data.content ?? []);
+      setTotal(res.data.totalElements ?? 0);
+      setTotalPages(res.data.totalPages ?? 0);
     } catch {
-      setError("Σφάλμα φόρτωσης δεδομένων");
+      setError("Σφάλμα φόρτωσης πελατών");
     } finally {
       setLoading(false);
     }
-  }, [page, search, filterCity, filterActive, user]);
+  }, [page, search, filterCity, filterActive, user?.id]);
 
   useEffect(() => {
     fetchCustomers();
@@ -311,110 +383,46 @@ export default function DealerCustomersPage() {
     setFilterActive("");
     setPage(0);
   };
-  const hasFilters = search || filterCity || filterActive !== "";
-  const cities = [...new Set(customers.map((c) => c.city).filter(Boolean))];
+
+  // ── Open view dialog — fetch fresh customer to get latest data ──────────────
+  const handleView = async (c) => {
+    try {
+      const res = await customersApi.getById(c.id);
+      setSelected(res.data);
+    } catch {
+      setSelected(c); // fallback to list data if fetch fails
+    }
+    setDialogOpen(true);
+  };
+
+  // ── Open reassign dialog ─────────────────────────────────────────────────────
+  const handleReassign = (e, c) => {
+    e.stopPropagation();
+    setReassignTarget(c);
+    setReassignOpen(true);
+  };
 
   return (
     <Box>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <Box
         sx={{
+          mb: 2.5,
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          mb: 3,
+          justifyContent: "space-between",
         }}
       >
         <Box>
           <Typography sx={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>
             Πελάτες
           </Typography>
-          <Typography sx={{ fontSize: 13, color: "#9ca3af" }}>
-            {total} εγγραφές — μόνο δικοί σας πελάτες
+          <Typography sx={{ fontSize: 13, color: "#6b7280", mt: 0.3 }}>
+            Πελάτες που ανήκουν στο δίκτυό σας
           </Typography>
         </Box>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Filters */}
-      <Paper
-        elevation={0}
-        sx={{ p: 2, mb: 2, borderRadius: 2, border: "0.5px solid #e5e7eb" }}
-      >
-        <Stack
-          direction="row"
-          spacing={1.5}
-          flexWrap="wrap"
-          alignItems="center"
-          useFlexGap
-        >
-          <TextField
-            size="small"
-            placeholder="Αναζήτηση ΑΦΜ, επωνυμία..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            sx={{ width: 240 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ fontSize: 18, color: "#9ca3af" }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Πόλη</InputLabel>
-            <Select
-              value={filterCity}
-              label="Πόλη"
-              onChange={(e) => {
-                setFilterCity(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλες</MenuItem>
-              {cities.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Ενεργός</InputLabel>
-            <Select
-              value={filterActive}
-              label="Ενεργός"
-              onChange={(e) => {
-                setFilterActive(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Όλοι</MenuItem>
-              <MenuItem value="true">Ναι</MenuItem>
-              <MenuItem value="false">Όχι</MenuItem>
-            </Select>
-          </FormControl>
-          {hasFilters && (
-            <Button
-              size="small"
-              onClick={clearFilters}
-              sx={{ color: "#9ca3af", fontSize: 12 }}
-            >
-              Καθαρισμός ✕
-            </Button>
-          )}
-        </Stack>
-      </Paper>
-
-      {/* Table */}
       <Paper
         elevation={0}
         sx={{
@@ -423,61 +431,135 @@ export default function DealerCustomersPage() {
           overflow: "hidden",
         }}
       >
+        {/* ── Filters ──────────────────────────────────────────────────────── */}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: "0.5px solid #e5e7eb",
+            display: "flex",
+            gap: 1.5,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <TextField
+            size="small"
+            placeholder="Αναζήτηση ΑΦΜ / Επωνυμία..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 16, color: "#9ca3af" }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: 240, "& .MuiInputBase-root": { fontSize: 13 } }}
+          />
+
+          <TextField
+            size="small"
+            placeholder="Πόλη"
+            value={filterCity}
+            onChange={(e) => {
+              setFilterCity(e.target.value);
+              setPage(0);
+            }}
+            sx={{ width: 140, "& .MuiInputBase-root": { fontSize: 13 } }}
+          />
+
+          <FormControl size="small" sx={{ width: 130 }}>
+            <InputLabel sx={{ fontSize: 13 }}>Ενεργός</InputLabel>
+            <Select
+              value={filterActive}
+              label="Ενεργός"
+              onChange={(e) => {
+                setFilterActive(e.target.value);
+                setPage(0);
+              }}
+              sx={{ fontSize: 13 }}
+            >
+              <MenuItem value="">Όλοι</MenuItem>
+              <MenuItem value="true">Ναι</MenuItem>
+              <MenuItem value="false">Όχι</MenuItem>
+            </Select>
+          </FormControl>
+
+          {(search || filterCity || filterActive) && (
+            <Button
+              size="small"
+              onClick={clearFilters}
+              sx={{ fontSize: 12, color: "#6b7280", textTransform: "none" }}
+            >
+              Καθαρισμός
+            </Button>
+          )}
+        </Box>
+
+        {/* ── Table ────────────────────────────────────────────────────────── */}
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={32} />
+            <CircularProgress size={28} />
           </Box>
+        ) : error ? (
+          <Alert severity="error" sx={{ m: 2 }}>
+            {error}
+          </Alert>
         ) : (
           <Box sx={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#fafafa" }}>
-                  {["ΑΦΜ", "Επωνυμία", "Πόλη", "Ενεργός", ""].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "left",
-                        fontSize: 11,
-                        color: "#9ca3af",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                        fontWeight: 500,
-                        borderBottom: "0.5px solid #e5e7eb",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {["ΑΦΜ", "Επωνυμία", "Πόλη", "Sub-dealer", "Ενεργός", ""].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "left",
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          fontWeight: 500,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                          borderBottom: "0.5px solid #e5e7eb",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {customers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       style={{
-                        padding: 40,
+                        padding: "40px 16px",
                         textAlign: "center",
                         color: "#9ca3af",
-                        fontSize: 14,
+                        fontSize: 13,
                       }}
                     >
                       Δεν βρέθηκαν πελάτες
                     </td>
                   </tr>
                 ) : (
-                  customers.map((c, i) => (
+                  customers.map((c) => (
                     <tr
                       key={c.id}
                       style={{
-                        borderBottom:
-                          i < customers.length - 1
-                            ? "0.5px solid #f3f4f6"
-                            : "none",
+                        borderBottom: "0.5px solid #f3f4f6",
                         cursor: "pointer",
                       }}
+                      onClick={() => handleView(c)}
                     >
                       <td
                         style={{
@@ -489,16 +571,15 @@ export default function DealerCustomersPage() {
                       >
                         {c.afm}
                       </td>
-                      <td style={{ padding: "11px 16px" }}>
-                        <Typography
-                          sx={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#111827",
-                          }}
-                        >
-                          {c.eponymia}
-                        </Typography>
+                      <td
+                        style={{
+                          padding: "11px 16px",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: "#111827",
+                        }}
+                      >
+                        {c.eponymia}
                       </td>
                       <td
                         style={{
@@ -508,6 +589,17 @@ export default function DealerCustomersPage() {
                         }}
                       >
                         {c.city}
+                      </td>
+                      <td
+                        style={{
+                          padding: "11px 16px",
+                          fontSize: 13,
+                          color: "#374151",
+                        }}
+                      >
+                        {c.subDealerName || (
+                          <span style={{ color: "#d1d5db" }}>—</span>
+                        )}
                       </td>
                       <td style={{ padding: "11px 16px" }}>
                         <Chip
@@ -522,38 +614,37 @@ export default function DealerCustomersPage() {
                         />
                       </td>
                       <td style={{ padding: "11px 16px" }}>
-                        <Tooltip title="Αλλαγή Sub-dealer">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReassignTarget(c);
-                              setReassignOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1d4ed8" },
-                            }}
-                          >
-                            <SwapHorizIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Προβολή">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelected(c);
-                              setDialogOpen(true);
-                            }}
-                            sx={{
-                              color: "#9ca3af",
-                              "&:hover": { color: "#1f6feb" },
-                            }}
-                          >
-                            <VisibilityIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
+                        <Stack direction="row" spacing={0}>
+                          {/* Reassign sub-dealer — dealer right per spec */}
+                          <Tooltip title="Αλλαγή Sub-dealer">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => handleReassign(e, c)}
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#1d4ed8" },
+                              }}
+                            >
+                              <SwapHorizIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          {/* View details */}
+                          <Tooltip title="Προβολή">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleView(c);
+                              }}
+                              sx={{
+                                color: "#9ca3af",
+                                "&:hover": { color: "#1f6feb" },
+                              }}
+                            >
+                              <VisibilityIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
                       </td>
                     </tr>
                   ))
@@ -562,6 +653,8 @@ export default function DealerCustomersPage() {
             </table>
           </Box>
         )}
+
+        {/* ── Pagination ───────────────────────────────────────────────────── */}
         <Box
           sx={{
             px: 2,
@@ -574,9 +667,8 @@ export default function DealerCustomersPage() {
         >
           <Typography sx={{ fontSize: 12, color: "#9ca3af" }}>
             {total === 0
-              ? "0"
-              : `${page * PER_PAGE + 1}–${Math.min((page + 1) * PER_PAGE, total)}`}{" "}
-            από {total} εγγραφές
+              ? "0 εγγραφές"
+              : `${page * PER_PAGE + 1}–${Math.min((page + 1) * PER_PAGE, total)} από ${total} εγγραφές`}
           </Typography>
           <Stack direction="row" spacing={0.5}>
             {[...Array(totalPages)].map((_, i) => (
@@ -587,11 +679,11 @@ export default function DealerCustomersPage() {
                   width: 28,
                   height: 28,
                   borderRadius: 1,
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: 12,
-                  cursor: "pointer",
                   fontWeight: page === i ? 600 : 400,
                   background: page === i ? "#1f6feb" : "transparent",
                   color: page === i ? "#fff" : "#6b7280",
@@ -606,10 +698,14 @@ export default function DealerCustomersPage() {
         </Box>
       </Paper>
 
+      {/* ── Dialogs ─────────────────────────────────────────────────────────── */}
       <CustomerViewDialog
         customer={selected}
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          setDialogOpen(false);
+          setSelected(null);
+        }}
       />
 
       <ReassignSubDealerDialog
@@ -621,7 +717,7 @@ export default function DealerCustomersPage() {
         }}
         onSuccess={() => {
           setSuccessSnack(true);
-          fetchCustomers();
+          fetchCustomers(); // refresh the list so the new sub-dealer name shows immediately
         }}
       />
 

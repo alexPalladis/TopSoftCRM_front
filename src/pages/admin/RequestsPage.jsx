@@ -36,6 +36,7 @@ import { dealersApi } from "../../services/dealers";
 import { networksApi } from "../../services/networks";
 import { subdealersApi } from "../../services/subdealers";
 import TablePagination from "../../components/shared/TablePagination";
+import TicketViewDialog from "../../components/shared/TicketViewDialog";
 
 const PER_PAGE = 10;
 
@@ -66,125 +67,6 @@ const entityLabels = {
 
 function formatFrom(type, name) {
   return `${entityLabels[type] || type}, ${name || "—"}`;
-}
-
-// ─── View Dialog ───────────────────────────────────────────────────────────────
-function TicketViewDialog({ ticket, open, onClose, onComplete }) {
-  if (!ticket) return null;
-  const fromColors = entityColors[ticket.fromType] || entityColors.ADMIN;
-  const toColors = entityColors[ticket.toType] || entityColors.ADMIN;
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, border: "0.5px solid #e5e7eb" } }}
-    >
-      <DialogTitle
-        sx={{
-          pb: 1,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>
-            {ticket.subject}
-          </Typography>
-          <Typography sx={{ fontSize: 11, color: "#9ca3af" }}>
-            {ticket.createdAt?.slice(0, 16).replace("T", " ")}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Chip
-            label={
-              ticket.status === "PENDING" ? "Σε εκκρεμότητα" : "Ολοκληρώθηκε"
-            }
-            size="small"
-            icon={
-              ticket.status === "PENDING" ? (
-                <PendingIcon />
-              ) : (
-                <CheckCircleIcon />
-              )
-            }
-            sx={{
-              background: ticket.status === "PENDING" ? "#fef3c7" : "#dcfce7",
-              color: ticket.status === "PENDING" ? "#b45309" : "#166534",
-            }}
-          />
-          <IconButton size="small" onClick={onClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      </DialogTitle>
-
-      <DialogContent sx={{ pt: 1 }}>
-        <Stack direction="row" spacing={1} mb={2} flexWrap="wrap" useFlexGap>
-          <Chip
-            size="small"
-            label={`Από: ${formatFrom(ticket.fromType, ticket.fromName)}`}
-            sx={{
-              background: fromColors.bg,
-              color: fromColors.color,
-              fontSize: 11,
-            }}
-          />
-          <Chip
-            size="small"
-            label={`Προς: ${formatFrom(ticket.toType, ticket.toName)}`}
-            sx={{
-              background: toColors.bg,
-              color: toColors.color,
-              fontSize: 11,
-            }}
-          />
-        </Stack>
-        <Divider sx={{ mb: 2 }} />
-        <Typography
-          sx={{
-            fontSize: 10,
-            color: "#9ca3af",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            mb: 1,
-          }}
-        >
-          Αίτημα
-        </Typography>
-        <Typography sx={{ fontSize: 13, color: "#374151", lineHeight: 1.7 }}>
-          {ticket.body}
-        </Typography>
-      </DialogContent>
-
-      <DialogActions
-        sx={{
-          px: 3,
-          py: 2,
-          borderTop: "0.5px solid #e5e7eb",
-          justifyContent: "space-between",
-        }}
-      >
-        <Button size="small" onClick={onClose} sx={{ color: "#6b7280" }}>
-          Κλείσιμο
-        </Button>
-        {ticket.status === "PENDING" && (
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<CheckCircleIcon />}
-            onClick={() => onComplete(ticket.id)}
-            sx={{ background: "#16a34a", "&:hover": { background: "#15803d" } }}
-          >
-            Ολοκλήρωση
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
 }
 
 // ─── Form Dialog ───────────────────────────────────────────────────────────────
